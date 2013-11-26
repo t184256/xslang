@@ -91,10 +91,9 @@ class XSLangFunction(List):
 class XSLangDot(List):
     def evl(self, x):
         left = self[0].evl(x)
-        right = self[1]
+        right = self[1][0]
         return left.dic[right]
-def XSLangDotCreate(l):
-    return XSLangDot(l[0])
+#def XSLangDotCreate(l): return XSLangDot(l[0])
 
 XSLangFunctionWoXSLangParam = lambda l: XSLangFunction([XSLangParam([''])] + l)
 class XSLangCall(List):
@@ -107,7 +106,7 @@ class XSLangCall(List):
         val = func.call(x)
         x.drop_context()
         return val
-def XSLangCallCreate(l): return XSLangCall(l[0])
+#def XSLangCallCreate(l): return XSLangCall(l[0])
 
 class XSLangIdentifier(List):
     def evl(self, x):
@@ -127,22 +126,27 @@ WORD = AnyBut(FORBIDDEN)[1:,...]
 
 with DroppedSpace():
     EXPR = Delayed()
-    CALL = Delayed();
+    EXPRATOM = Delayed()
     IDENTIFIER = WORD > XSLangIdentifier
-    DOT = EXPR + L('.') + IDENTIFIER > XSLangDotCreate
     STRING = WHITESPACE & SingleLineString(quote='\'') & WHITESPACE > XSLangString
+    BRACED = L('(') & EXPR & L(')') > XSLangExpression
+    G1 = BRACED | STRING | IDENTIFIER
+    DOT = EXPRATOM & L('.') & IDENTIFIER > XSLangDot
+    G2 = DOT | G1
+    CALL = (
+            (EXPRATOM & L('(') & EXPR & L(')')) | \
+            (EXPRATOM & L('(') & L(')')) \
+            ) > XSLangCall
+    G3 = CALL | G2
     FUNCNP = (L('{') & EXPR & L('}')) > XSLangFunctionWoXSLangParam
     PARAM = WORD > XSLangParam
     FUNCWP = (L('{') & PARAM & L('|') & EXPR & L('}')) > XSLangFunction
     FUNC = FUNCNP | FUNCWP
-    BRACED = L('(') + EXPR + L(')') > XSLangExpression
-    EXPRATOM = (BRACED | CALL | DOT | FUNC | STRING | IDENTIFIER) > XSLangExpression
-    CALL += (
-            (EXPRATOM + L('(') + EXPR + L(')')) | \
-            (EXPRATOM + L('(') + L(')')) \
-            ) > XSLangCallCreate
-    EXPR += EXPRATOM[:, L(';')] > XSLangExpression
-    EXPR.config.auto_memoize()
+    G4 = FUNC | G3
+    EXPRATOM += G4 > XSLangExpression
+    EXPR += EXPRATOM[1:, L(';')] > XSLangExpression
+    EXPREOS = EXPR & ~Eos()
+    EXPREOS.config.auto_memoize()
 
 def eliminate_duplicate_expressions(tree):
     if len(tree) == 1:
@@ -182,6 +186,18 @@ def xslang_println(self, x, param):
     sys.stdout.write('\n')
     return param
 
+@XSLangObject.function
+def xslang_concat(self, x, param):
+	p = param._contained_string if param else ''
+	return Concatenator(p)
+def xslang_concat_combine(self, x, param):
+    return Concatenator(self.dic['string']._contained_string
+		    + param._contained_string)
+class Concatenator(XSLangObject):
+    def __init__(self, string):
+        XSLangObject.__init__(self, string=string, call=xslang_concat_combine)
+        self.dic['string'] = XSLangObject(string=string)
+
 class XSLangRootObject(XSLangObject):
     def __init__(self):
         self.dic = {
@@ -192,6 +208,7 @@ class XSLangRootObject(XSLangObject):
                 'greet_smb': greet_smb,
             }),
             'string': XSLangPackage({
+                'concat': xslang_concat,
                 'print': xslang_print,
                 'println': xslang_println,
             }),
@@ -203,7 +220,7 @@ def XSLangEval(code, printtree=False):
     x = XSLangBase(XSLangRootObject())
 
     try:
-        for e in EXPR.get_parse_string()(code):
+        for e in EXPREOS.get_parse_string()(code):
             if printtree: print e
             r = e.evl(x)
             return r
@@ -224,6 +241,8 @@ TESTS = {
     "{x|xslang.greetings.greet_smb(x)}('Dan')"      : 'Greetings, Dan!',
     "xslang.string.print('a')"                      : 'a',
     "xslang.string.println('a')"                    : 'a',
+    "(xslang.string.concat()('a')).string"          : 'a',
+    "(xslang.string.concat('a')('b')('c')).string"  : 'abc',
 }
 
 def tests(printtree=False):
