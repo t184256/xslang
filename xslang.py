@@ -185,6 +185,8 @@ class XSLangRootObject(XSLangObject):
             }),
             'operator': XSLangPackage(),
             'string': XSLangPackage({
+                'reverse': XSLangObject(call=(lambda s, x, p: (
+                        XSLangObject(string=(p._contained_string[::-1]))))),
                 'print': xslang_print,
                 'println': xslang_println,
             }),
@@ -218,6 +220,7 @@ TESTS = {
     "{x|xslang.greetings.greet_smb(x)}('Dan')"      : 'Greetings, Dan!',
     "xslang.string.print('a')"                      : 'a',
     "xslang.string.println('a')"                    : 'a',
+    "xslang.string.reverse('130')"                  : '031',
     "xslang.operator.identity('a')"                 : 'a',
 }
 
@@ -225,10 +228,13 @@ def tests(printtree=False):
     for c, s in TESTS.items():
         v = XSLangEval(c, printtree)
         if v is not None:
-            if '_contained_string' in v.__dict__:
-                v = v._contained_string
+            if not isinstance(v, str):
+                if '_contained_string' in v.__dict__:
+                    v = v._contained_string
+                else:
+                    v = 'NO STRING'
             else:
-                v = 'NO STRING'
+                v = 'PYTHON STRING [' + v + ']'
         else:
             v = 'NONE RETURNED'
         print 'Test:', 'success' if v == s else 'FAILURE!', c, s, v
