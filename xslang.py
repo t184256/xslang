@@ -147,17 +147,6 @@ with DroppedSpace():
     EXPR += EXPRATOM[:, L(';')] > XSLangExpression
     EXPR.config.auto_memoize()
 
-def eliminate_duplicate_expressions(tree):
-    if len(tree) == 1:
-        if isinstance(tree, XSLangExpression) and \
-                isinstance(tree[0], XSLangExpression):
-            return eliminate_duplicate_expressions(tree[0])
-    if tree == tree[0]:
-        raise Exception("BAD")
-    for i in range(len(tree)):
-        tree[i] = eliminate_duplicate_expressions(tree[i])
-    return tree
-
 ### Standard library definition (the xslang.***) ###
 
 greet = XSLangObject(call=(lambda s, f, a: 'Greetings!'))
