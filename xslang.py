@@ -43,6 +43,9 @@ class XSLangObject(object):
             return "XSLangObject: '"+self._contained_string+"' " + str(self.dic)
         return object.__str__(self) + ' ' + str(self.dic)
 
+    def __setitem__(self, name, obj): self.dic[name] = obj
+    def __getitem__(self, name): return self.dic[name]
+
 def _tryget(cstack, name, maxdepth=-1, pop=False):
     if not cstack: return None
     if name in cstack[-1]:
@@ -165,9 +168,9 @@ def greet_smb(self, x, param):
     return XSLangObject(string='Greetings, ' + param._contained_string + '!')
 
 class XSLangPackage(XSLangObject):
-    def __init__(self, dic):
+    def __init__(self, inject_dic=None):
         XSLangObject.__init__(self)
-        self.dic.update(dic)
+        self.dic.update(inject_dic or {})
 
 @XSLangObject.function
 def xslang_print(self, x, param):
@@ -191,17 +194,19 @@ class XSLangRootObject(XSLangObject):
                 'greet': greet,
                 'greet_smb': greet_smb,
             }),
+            'operator': XSLangPackage(),
             'string': XSLangPackage({
                 'print': xslang_print,
                 'println': xslang_println,
             }),
         }
+        identity = XSLangEval('{x|x}', rootobj=self)
+        self.dic['operator']['identity'] = identity
 
 ### The interpreter ###
 
-def XSLangEval(code, printtree=False):
-    x = XSLangBase(XSLangRootObject())
-
+def XSLangEval(code, printtree=False, rootobj=None):
+    x = XSLangBase(rootobj or XSLangRootObject())
     try:
         for e in EXPR.get_parse_string()(code):
             if printtree: print e
@@ -224,6 +229,7 @@ TESTS = {
     "{x|xslang.greetings.greet_smb(x)}('Dan')"      : 'Greetings, Dan!',
     "xslang.string.print('a')"                      : 'a',
     "xslang.string.println('a')"                    : 'a',
+    "xslang.operator.identity('a')"                 : 'a',
 }
 
 def tests(printtree=False):
