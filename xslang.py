@@ -22,33 +22,26 @@ from lepl import *
 ### Language constructs ###
 
 class XSLangObject(object):
-    def __init__(self, string=None):
+    def __init__(self, string=None, call=None):
         self.dic = {}
         if string is not None: self._contained_string = string
+        if call is not None:
+            # requires a function that accepts:
+            #    self : XSLangObject, x : Context, param : XSLangObject
+            self._called_paramname = 'pyfuncarg'
+            self.call = types.MethodType(
+                    (lambda s, x: call(s, x,
+                            x.get_o('pyfuncarg', maxdepth=0, pop=True))),
+                    self, XSLangObject
+            )
 
-    def evl(self, x):
-        return self
+    @staticmethod
+    def function(pyfunc): return XSLangObject(call=pyfunc)
 
     def __str__(self):
         if '_contained_string' in self.__dict__:
             return "XSLangObject: '"+self._contained_string+"' " + str(self.dic)
         return object.__str__(self) + ' ' + str(self.dic)
-
-    @staticmethod
-    def create_callable(function, string=None):
-        # requires a function that accepts:
-        #    self : XSLangObject, x : Context, param : XSLangObject
-        xslang_obj = XSLangObject(string)
-        xslang_obj._called_paramname = 'pyfuncarg'
-        xslang_obj.call = types.MethodType(
-                (lambda s, x: function(s, x,
-                        x.get_o('pyfuncarg', maxdepth=0, pop=True))),
-                xslang_obj, XSLangObject
-        )
-        return xslang_obj
-
-    @staticmethod
-    def create_string(s): return XSLangObject(string=s)
 
 def _tryget(cstack, name, maxdepth=-1, pop=False):
     if not cstack: return None
@@ -121,7 +114,7 @@ class XSLangIdentifier(List):
         return x.get_o(self[0])
 class XSLangString(List):
     def evl(self, x):
-        return XSLangObject.create_string(self[0])
+        return XSLangObject(string=self[0])
 
 
 ### Syntax definition ###
@@ -164,10 +157,7 @@ def eliminate_duplicate_expressions(tree):
 
 ### Standard library definition (the xslang.***) ###
 
-class greet(XSLangObject):
-    def call(self, x):
-        return XSLangObject.create_string('Greetings!')
-    _contained_string = 'a modest greeter'
+greet = XSLangObject(call=(lambda s, f, a: 'Greetings!'))
 
 class XSLangPyFunc(XSLangObject):
     _called_paramname = 'pyfuncarg'
@@ -175,11 +165,10 @@ class XSLangPyFunc(XSLangObject):
         paramval = x.get_o('pyfuncarg', maxdepth=0, pop=True)
         return self.body(x, paramval)
 
-class greet_smb(XSLangPyFunc):
-    def body(self, x, param):
-        if param is None: return XSLangObject.create_string('Greetings, stranger!')
-        return XSLangObject.create_string('Greetings, ' + param._contained_string + '!')
-    _contained_string = 'a modest greeter'
+@XSLangObject.function
+def greet_smb(self, x, param):
+    if param is None: return XSLangObject(string='Greetings, stranger!')
+    return XSLangObject(string='Greetings, ' + param._contained_string + '!')
 
 class XSLangPackage(XSLangObject):
     def __init__(self, dic):
@@ -189,11 +178,11 @@ class XSLangPackage(XSLangObject):
 class XSLangRootObject(XSLangObject):
     def __init__(self):
         self.dic = {
-            'fun': XSLangObject.create_callable(lambda s, x, p: p),
+            'fun': XSLangObject(call=(lambda s, x, p: p)),
             'greetings': XSLangPackage({
-                'hw': XSLangObject.create_string('Hello World!'),
-                'greet': greet(),
-                'greet_smb': greet_smb(),
+                'hw': XSLangObject(string='Hello World!'),
+                'greet': greet,
+                'greet_smb': greet_smb,
             }),
         }
 
