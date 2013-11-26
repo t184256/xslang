@@ -159,12 +159,6 @@ def eliminate_duplicate_expressions(tree):
 
 greet = XSLangObject(call=(lambda s, f, a: 'Greetings!'))
 
-class XSLangPyFunc(XSLangObject):
-    _called_paramname = 'pyfuncarg'
-    def call(self, x):
-        paramval = x.get_o('pyfuncarg', maxdepth=0, pop=True)
-        return self.body(x, paramval)
-
 @XSLangObject.function
 def greet_smb(self, x, param):
     if param is None: return XSLangObject(string='Greetings, stranger!')
@@ -175,6 +169,19 @@ class XSLangPackage(XSLangObject):
         XSLangObject.__init__(self)
         self.dic.update(dic)
 
+@XSLangObject.function
+def xslang_print(self, x, param):
+    import sys
+    sys.stdout.write(param._contained_string or '???')
+    return param
+
+@XSLangObject.function
+def xslang_println(self, x, param):
+    import sys
+    sys.stdout.write(param._contained_string or '???')
+    sys.stdout.write('\n')
+    return param
+
 class XSLangRootObject(XSLangObject):
     def __init__(self):
         self.dic = {
@@ -183,6 +190,10 @@ class XSLangRootObject(XSLangObject):
                 'hw': XSLangObject(string='Hello World!'),
                 'greet': greet,
                 'greet_smb': greet_smb,
+            }),
+            'string': XSLangPackage({
+                'print': xslang_print,
+                'println': xslang_println,
             }),
         }
 
@@ -211,6 +222,8 @@ TESTS = {
     "{xslang.greetings.hw}('a')"                    : 'Hello World!',
     "{x|xslang.greetings.greet_smb(x)}()"           : 'Greetings, stranger!',
     "{x|xslang.greetings.greet_smb(x)}('Dan')"      : 'Greetings, Dan!',
+    "xslang.string.print('a')"                      : 'a',
+    "xslang.string.println('a')"                    : 'a',
 }
 
 def tests(printtree=False):
