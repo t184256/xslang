@@ -43,6 +43,9 @@ class XSLangObject(object):
             return "XSLangObject: '"+self._contained_string+"' " + str(self.dic)
         return object.__str__(self) + ' ' + str(self.dic)
 
+    def __setitem__(self, name, obj): self.dic[name] = obj
+    def __getitem__(self, name): return self.dic[name]
+
 def _tryget(cstack, name, maxdepth=-1, pop=False):
     if not cstack: return None
     if name in cstack[-1]:
@@ -148,17 +151,6 @@ with DroppedSpace():
     EXPREOS = EXPR & ~Eos()
     EXPREOS.config.auto_memoize()
 
-def eliminate_duplicate_expressions(tree):
-    if len(tree) == 1:
-        if isinstance(tree, XSLangExpression) and \
-                isinstance(tree[0], XSLangExpression):
-            return eliminate_duplicate_expressions(tree[0])
-    if tree == tree[0]:
-        raise Exception("BAD")
-    for i in range(len(tree)):
-        tree[i] = eliminate_duplicate_expressions(tree[i])
-    return tree
-
 ### Standard library definition (the xslang.***) ###
 
 greet = XSLangObject(call=(lambda s, f, a: 'Greetings!'))
@@ -169,9 +161,9 @@ def greet_smb(self, x, param):
     return XSLangObject(string='Greetings, ' + param._contained_string + '!')
 
 class XSLangPackage(XSLangObject):
-    def __init__(self, dic):
+    def __init__(self, inject_dic=None):
         XSLangObject.__init__(self)
-        self.dic.update(dic)
+        self.dic.update(inject_dic or {})
 
 @XSLangObject.function
 def xslang_print(self, x, param):
@@ -207,18 +199,22 @@ class XSLangRootObject(XSLangObject):
                 'greet': greet,
                 'greet_smb': greet_smb,
             }),
+            'operator': XSLangPackage(),
             'string': XSLangPackage({
                 'concat': xslang_concat,
+                'reverse': XSLangObject(call=(lambda s, x, p: (
+                        XSLangObject(string=(p._contained_string[::-1]))))),
                 'print': xslang_print,
                 'println': xslang_println,
             }),
         }
+        identity = XSLangEval('{x|x}', rootobj=self)
+        self.dic['operator']['identity'] = identity
 
 ### The interpreter ###
 
-def XSLangEval(code, printtree=False):
-    x = XSLangBase(XSLangRootObject())
-
+def XSLangEval(code, printtree=False, rootobj=None):
+    x = XSLangBase(rootobj or XSLangRootObject())
     try:
         for e in EXPREOS.get_parse_string()(code):
             if printtree: print e
@@ -243,16 +239,21 @@ TESTS = {
     "xslang.string.println('a')"                    : 'a',
     "(xslang.string.concat()('a')).string"          : 'a',
     "(xslang.string.concat('a')('b')('c')).string"  : 'abc',
+    "xslang.string.reverse('130')"                  : '031',
+    "xslang.operator.identity('a')"                 : 'a',
 }
 
 def tests(printtree=False):
     for c, s in TESTS.items():
         v = XSLangEval(c, printtree)
         if v is not None:
-            if '_contained_string' in v.__dict__:
-                v = v._contained_string
+            if not isinstance(v, str):
+                if '_contained_string' in v.__dict__:
+                    v = v._contained_string
+                else:
+                    v = 'NO STRING'
             else:
-                v = 'NO STRING'
+                v = 'PYTHON STRING [' + v + ']'
         else:
             v = 'NONE RETURNED'
         print 'Test:', 'success' if v == s else 'FAILURE!', c, s, v
