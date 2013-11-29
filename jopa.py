@@ -79,6 +79,8 @@ class JOPABrace(JOPAObject):
         if isinstance(f, JOPABrace): f = f.eval()
         if isinstance(f, str):
             if f in self: f = self[f]
+            else:
+                raise Exception("Uncallable literal '%s' starts the brace" % f)
         for a in self._parsed[1:]:
             if isinstance(a, JOPABrace):
                 if f.takes_literal:
@@ -97,6 +99,8 @@ class JOPABrace(JOPAObject):
         if isinstance(f, JOPABrace): f = f.eval_eager()
         if isinstance(f, str):
             if f in self: f = self[f]
+            else:
+                raise Exception("Uncallable literal '%s' starts the brace" % f)
         while True:
             a = self.read_one()
             if a is None: break
@@ -105,7 +109,6 @@ class JOPABrace(JOPAObject):
                     a = a._parse()
                 else:
                     a = a.eval_eager()
-#                a = a.eval_eager() if f.takes_literal else a._parse()
             f = self.apply(f, a)
         return f
 
