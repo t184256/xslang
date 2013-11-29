@@ -83,7 +83,7 @@ class Interactive(object):
 def prettyprintstate(b):
     state = b.exposed_current_state
     if isinstance(state, JOPABrace):
-        return '(' + prettyprintstate(state.exposed_current_state, state) + ')'
+        return '(' + prettyprintstate(state) + ')'
     if isinstance(state, JOPAString): return '\'' + str(state) + '\''
     if not state: return '...'
     m = ugly_objectdesc.match(str(state))
