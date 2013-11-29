@@ -26,7 +26,7 @@ TESTS = (
     ("(jopa context get (jopa string literal (jopa)))",
      'jopa root package'),
     ("(jopa context set hi (jopa string literal (Hello)) hi)", 'Hello'),
-    ("(jopa operators ident jopa)",
+    ("(jopa operator ident jopa)",
      'jopa root package')
 )
 

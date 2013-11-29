@@ -195,7 +195,7 @@ class JOPAIdent(JOPAObject):
         return arg
 
 jopa_ro = JOPAObjectPackage('jopa root package', {
-    'operators': JOPAObjectPackage('jopa.operators package', {
+    'operator': JOPAObjectPackage('jopa.operator package', {
         'ident': JOPAIdent(),
     }),
     'context': JOPAObjectPackage('jopa.context package', {
