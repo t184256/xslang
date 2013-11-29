@@ -16,6 +16,32 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
+class JOPAObject(object):
+    def __init__(self, takes_literal=False):
+        self.takes_literal = takes_literal
+
+class JOPAObjectNone(JOPAObject): pass
+
+class JOPAObjectPackage(JOPAObject):
+    def __init__(self, name, dic):
+        JOPAObject.__init__(self)
+        self.dic, self.name = dic, name
+    def __call__(self, arg, brace):
+        return self.dic[arg]
+    def __str__(self):
+        return self.name
+
+class JOPAString(JOPAObject):
+    def __init__(self, initial_string=None, takes_literal=False):
+        JOPAObject.__init__(self, takes_literal=takes_literal)
+        self._str = initial_string or ''
+    def __call__(self, arg, brace):
+        return JOPAString(initial_string=(self._str + str(arg)))
+    def __str__(self):
+        return self._str
+
+### The interpreter: the Brace ###
+
 class StringSource(object):
     def __init__(self, code):
         self._str = code
@@ -29,12 +55,13 @@ class StringSource(object):
         return char
     def preview(self): return self._str
 
-class JOPAInterpreter(object):
+class JOPABrace(JOPAObject):
     def __init__(self, source, parent=None, rootobj=None):
         self.source = source
         self.context = {}
         if not rootobj is None: self.context['jopa'] = rootobj
         self.parent = parent
+        self.string = ''
 
     def __getitem__(self, n, maxdepth=-1):
         if n in self.context: return self.context[n]
@@ -47,60 +74,117 @@ class JOPAInterpreter(object):
         if not self.parent: return False
         return n in self.parent
 
-    def interpret(self):
+    def _parse(self):
+        """ Parses '(x y z) coming from source into a stored list [x, y, z] """
+        if '_parsed' in self.__dict__: return self
+        self._parsed = []
         if not self.source() == '(': raise Exception('No (')
-        o = self.read_one()
-        if o is None: return JOPAObjectNone(self) # ()
-        if o in self: o = self[o]
+        f = self.read_one()
+        if f is None: return self
+        if isinstance(f, JOPABrace): f = f._parse()
+        self._parsed.append(f)
         while True:
-            arg = self.read_one()
-            if arg is None: break
-            o = o(arg, self) # Provide a less eager evaluation later
-        return o
+            a = self.read_one()
+            if isinstance(a, JOPABrace): a._parse()
+            if a is None: break
+            self._parsed.append(a)
+        return self
+
+    def eval(self):
+        """ Parses, then evaluates the brace, feeding the arguments into the
+        first one """
+        if not '_parsed' in self.__dict__: self._parse()
+        if not len(self._parsed): return JOPAObjectNone(self) # ()
+        f = self._parsed[0]
+        if isinstance(f, JOPABrace): f = f.eval()
+        if isinstance(f, str):
+            if f in self: f = self[f]
+        for a in self._parsed[1:]:
+            if isinstance(a, JOPABrace):
+                if f.takes_literal:
+                    a = a._parse()
+                else:
+                    a = a.eval(self)
+#                a = a.eval(self) if not f.takes_literal else a._parse()
+#                a = a.eval(self) if not f.takes_literal else a._parse()
+            f = self.apply(f, a)
+        return f
+
+    def eval_eager(self):
+        """ Eagerly evaluates with every single incoming byte """
+        if '_parsed' in self.__dict__: return self.eval()
+        if not self.source() == '(': raise Exception('No (')
+        f = self.read_one()
+        if f is None: return JOPAObjectNone(self) # ()
+        if isinstance(f, JOPABrace): f = f.eval_eager()
+        if isinstance(f, str):
+            if f in self: f = self[f]
+        while True:
+            a = self.read_one()
+            if a is None: break
+            if isinstance(a, JOPABrace):
+                if f.takes_literal:
+                    a = a._parse()
+                else:
+                    a = a.eval_eager()
+#                a = a.eval_eager() if f.takes_literal else a._parse()
+            f = self.apply(f, a)
+        return f
 
     def read_one(self):
         s = ''
-        while self.source.peek().isspace(): self.source()
+        while self.source.peek().isspace(): self.getchar()
         if self.source.peek() == ')': self.source(); return None
         while True:
             c = self.source.peek()
             if not c: raise Exception('Premature end of source')
             if c == '(':
-                return JOPAInterpreter(self.source, self).interpret()
+                return JOPABrace(self.source, self)
             elif c.isspace(): break;
             elif c == ')': break;
             else:
-                s += self.source()
-        return s or None
+                s += self.getchar()
+        return s if len(s) else None
 
-class JOPAObject(object): pass
-class JOPAObjectNone(JOPAObject): pass
+    def getchar(self):
+        char = self.source()
+        self.string += char
+        return char
 
-class JOPAObjectPackage(JOPAObject):
-    def __init__(self, name, dic):
-        self.dic, self.name = dic, name
-    def __call__(self, arg, interpreter):
-        return self.dic[arg]
-    def __str__(self):
-        return self.name
-class JOPAStringCreate(JOPAObject):
-    def __init__(self, initial_string=None):
-        self._str = initial_string or ''
-    def __call__(self, arg, interpreter):
-        return JOPAStringCreate(initial_string=(self._str + str(arg)))
-    def __str__(self):
-        return self._str
+    def apply(self, func, arg):
+        if func.takes_literal:
+            if isinstance(arg, str): return func(JOPAString(arg), self)
+            if isinstance(arg, JOPABrace): return func(arg._parse(), self)
+            raise Exception("Unknown argument type for function of literal")
+        return func(arg, self)
+
+    def __call__(self, arg, brace):
+        return self.apply(self.eval_eager(), arg)
+
+    def __str__(self): return self.string
+
 jopa_ro = JOPAObjectPackage('jopa root package', {
     'string': JOPAObjectPackage('jopa.string package', {
-        'create': JOPAStringCreate(),
-        'space': JOPAStringCreate(' '),
+        'create': JOPAString(),
+        'space': JOPAString(' '),
+        'literal': JOPAString(takes_literal=True),
     })
 })
 
 #code = "(func1 arg1 (func2 arg2) () arg3 (func3 ()))"
 code = "(jopa string create Hello, (jopa string space) world!)"
+code = "(jopa string literal (Hello, world))"
 ss = StringSource(code)
 
-print JOPAInterpreter(ss, rootobj=jopa_ro).interpret()
+print 'parse'
+print JOPABrace(StringSource(code), rootobj=jopa_ro)._parse()._parsed
+print
 
+print 'eval'
+print JOPABrace(StringSource(code), rootobj=jopa_ro).eval()
+print
+
+print 'eval_eager'
+print JOPABrace(StringSource(code), rootobj=jopa_ro).eval_eager()
+print
 
