@@ -22,6 +22,8 @@ class JOPAObject(object):
 
 ### The interpreter: the Brace ###
 
+class JOPARuntimeException(Exception): pass
+
 class StringSource(object):
     def __init__(self, code):
         self._str = code
@@ -196,6 +198,28 @@ class JOPAIdent(JOPAObject):
     def __call__(self, arg, brace):
         return arg
 
+class JOPABoolean(JOPAObject): pass
+class JOPATrue(JOPABoolean):
+    def __str__(self): return 'true'
+class JOPAFalse(JOPABoolean):
+    def __str__(self): return 'false'
+def JOPABool(obj): return JOPATrue() if obj else JOPAFalse()
+
+class JOPAStringEqualCreator(JOPAObject):
+    def __call__(self, arg, brace):
+        if not isinstance(arg, JOPAString):
+            raise JOPARuntimeException('jopa.string.equal requires 1st string')
+        return JOPAStringEqual(arg)
+
+class JOPAStringEqual(JOPAObject):
+    def __init__(self, s):
+        JOPAObject.__init__(self)
+        self._s = s
+    def __call__(self, arg, brace):
+        if not isinstance(arg, JOPAString):
+            raise JOPARuntimeException('jopa.string.equal requires 2nd string')
+        return JOPABool(str(self._s) == str(arg))
+
 jopa_ro = JOPAObjectPackage('jopa root package', {
     'operator': JOPAObjectPackage('jopa.operator package', {
         'ident': JOPAIdent(),
@@ -204,14 +228,19 @@ jopa_ro = JOPAObjectPackage('jopa root package', {
         'get': JOPAContextGet(),
         'set': JOPAContextSetCreator(),
     }),
+    'bool': JOPAObjectPackage('jopa.bool package', {
+        'true': JOPATrue(),
+        'false': JOPAFalse(),
+    }),
     'string': JOPAObjectPackage('jopa.string package', {
         'create': JOPAString(),
-        'space': JOPAString(' '),
-        'tab': JOPAString('\t'),
+        'literal': JOPAString(takes_literal=True),
+        'equal': JOPAStringEqualCreator(),
         'lbrace': JOPAString('('),
         'rbrace': JOPAString(')'),
+        'space': JOPAString(' '),
+        'tab': JOPAString('\t'),
         'newline': JOPAString('\n'),
-        'literal': JOPAString(takes_literal=True),
     })
 })
 
