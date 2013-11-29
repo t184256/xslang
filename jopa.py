@@ -104,9 +104,7 @@ class JOPABrace(JOPAObject):
                 if f.takes_literal:
                     a = a._parse()
                 else:
-                    a = a.eval(self)
-#                a = a.eval(self) if not f.takes_literal else a._parse()
-#                a = a.eval(self) if not f.takes_literal else a._parse()
+                    a = a.eval()
             f = self.apply(f, a)
         return f
 
