@@ -25,6 +25,9 @@ TESTS = (
     ("(jopa string create a (jopa string tab) b)",             "a\tb"),
     ("(jopa context get (jopa string literal (jopa)))",
      'jopa root package'),
+    ("(jopa context set hi (jopa string literal (Hello)) hi)", 'Hello'),
+    ("(jopa operators ident jopa)",
+     'jopa root package')
 )
 
 if __name__ == '__main__':

@@ -129,6 +129,9 @@ class JOPABrace(JOPAObject):
             if isinstance(a, JOPABrace): return f(a._parse(), self)
             raise Exception("Unknown argument type for function of literal")
         else:
+            if isinstance(a, str):
+                if a in self:
+                    a = self[a]
             if isinstance(a, JOPABrace):
                 if f.takes_literal:
                     a = a._parse()
@@ -165,18 +168,36 @@ class JOPAString(JOPAObject):
         return self._str
 
 class JOPAContextGet(JOPAObject):
-    def __init__(self):
-        JOPAObject.__init__(self)
     def __call__(self, arg, brace):
         if not isinstance(arg, JOPAString):
             raise Exception('jopa.context.get requires a string')
         return brace[str(arg)]
 
+class JOPAContextSetCreator(JOPAObject):
+    def __init__(self):
+        JOPAObject.__init__(self, takes_literal=True)
+    def __call__(self, arg, brace):
+        return JOPAContextSet(str(arg))
+
+class JOPAContextSet(JOPAObject):
+    def __init__(self, name):
+        JOPAObject.__init__(self)
+        self.name = name
+    def __call__(self, arg, brace):
+        brace.context[self.name] = arg
+        return JOPAIdent()
+
+class JOPAIdent(JOPAObject):
+    def __call__(self, arg, brace):
+        return arg
 
 jopa_ro = JOPAObjectPackage('jopa root package', {
+    'operators': JOPAObjectPackage('jopa.operators package', {
+        'ident': JOPAIdent(),
+    }),
     'context': JOPAObjectPackage('jopa.context package', {
         'get': JOPAContextGet(),
-#        'set': JOPAContextSetCreator(),
+        'set': JOPAContextSetCreator(),
     }),
     'string': JOPAObjectPackage('jopa.string package', {
         'create': JOPAString(),
