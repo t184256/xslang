@@ -82,11 +82,6 @@ class JOPABrace(JOPAObject):
             else:
                 raise Exception("Uncallable literal '%s' starts the brace" % f)
         for a in self._parsed[1:]:
-            if isinstance(a, JOPABrace):
-                if f.takes_literal:
-                    a = a._parse()
-                else:
-                    a = a.eval()
             f = self.apply(f, a)
         return f
 
@@ -104,11 +99,6 @@ class JOPABrace(JOPAObject):
         while True:
             a = self.read_one()
             if a is None: break
-            if isinstance(a, JOPABrace):
-                if f.takes_literal:
-                    a = a._parse()
-                else:
-                    a = a.eval_eager()
             f = self.apply(f, a)
         return f
 
@@ -132,12 +122,20 @@ class JOPABrace(JOPAObject):
         self.string += char
         return char
 
-    def apply(self, func, arg):
-        if func.takes_literal:
-            if isinstance(arg, str): return func(JOPAString(arg), self)
-            if isinstance(arg, JOPABrace): return func(arg._parse(), self)
+    def apply(self, f, a):
+        #print 'APPLY "%s" "%s"' % (f, a), f.takes_literal, type(a)
+        if f.takes_literal:
+            if isinstance(a, str): return f(JOPAString(a), self)
+            if isinstance(a, JOPABrace): return f(a._parse(), self)
             raise Exception("Unknown argument type for function of literal")
-        return func(arg, self)
+        else:
+            if isinstance(a, JOPABrace):
+                if f.takes_literal:
+                    a = a._parse()
+                else:
+                    a.parent = self
+                    a = a.eval()
+        return f(a, self)
 
     def __call__(self, arg, brace):
         return self.apply(self.eval_eager(), arg)
@@ -170,6 +168,8 @@ jopa_ro = JOPAObjectPackage('jopa root package', {
     'string': JOPAObjectPackage('jopa.string package', {
         'create': JOPAString(),
         'space': JOPAString(' '),
+        'tab': JOPAString('\t'),
+        'newline': JOPAString('\n'),
         'literal': JOPAString(takes_literal=True),
     })
 })

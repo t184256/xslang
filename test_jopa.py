@@ -20,7 +20,9 @@ from jopa import simple_eval
 
 TESTS = (
     ("(jopa string create Hello, (jopa string space) world!)", "Hello, world!"),
-    ("(jopa string literal (Hello, world!))",                   "Hello, world!"),
+    ("(jopa string literal (Hello, world!))",                  "Hello, world!"),
+    ("(jopa string literal (\t))",                             "\t"),
+    ("(jopa string create a (jopa string tab) b)",             "a\tb"),
 )
 
 if __name__ == '__main__':
