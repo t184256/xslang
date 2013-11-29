@@ -174,7 +174,8 @@ jopa_ro = JOPAObjectPackage('jopa root package', {
 ### External interface ###
 
 def simple_eval(code, eager=True):
-    b = JOPABrace(StringSource(code), rootobj=jopa_ro)
+    if isinstance(code, str): code = StringSource(code)
+    b = JOPABrace(code, rootobj=jopa_ro)
     if eager:
         return b.eval_eager()
     else:
