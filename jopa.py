@@ -113,7 +113,9 @@ class JOPABrace(JOPAObject):
             c = self.source.peek()
             if not c: raise Exception('Premature end of source')
             if c == '(':
-                return JOPABrace(self.source, self)
+                new = JOPABrace(self.source, self)
+                self.exposed_current_state = new
+                return new
             elif c.isspace(): break;
             elif c == ')': break;
             else:
@@ -140,7 +142,7 @@ class JOPABrace(JOPAObject):
                     a = a._parse()
                 else:
                     a.parent = self
-                    a = a.eval()
+                    a = a.eval_eager()
         return f(a, self)
 
     def __call__(self, arg, brace):

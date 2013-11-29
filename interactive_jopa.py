@@ -23,6 +23,7 @@ import sys, time, re
 ugly_objectdesc = re.compile(r'<(\S*) object at .*>')
 
 class BackspaceException(Exception): pass
+class EnterException(Exception): pass
 
 try:
     from msvcrt import getch
@@ -62,7 +63,7 @@ class Interactive(object):
         else:
             wrote = self.h + self.s
             state = prettyprint(self.b.exposed_current_state, self.b)
-            l = 80 - 1 - (len(self.prompt()) + len(wrote) + len(state))
+            l = 80 - (len(self.prompt()) + len(wrote) + len(state))
             if l > 0:
                 print self.prompt() + wrote + ' ' * l + state
             else:
@@ -70,6 +71,7 @@ class Interactive(object):
                 print state
             self.interpreter_got_recreated = False
             c = getch()
+            if ord(c) == 13: raise EnterException()
             if ord(c) == 27: sys.exit(0)
             if ord(c) == 127: raise BackspaceException()
             out = self.s
@@ -79,14 +81,16 @@ class Interactive(object):
             return out
 
 def prettyprint(state, b):
+    print b
+    if isinstance(state, JOPABrace):
+        return '(' + prettyprint(state.exposed_current_state, state) + ')'
     if isinstance(state, JOPAString): return '\'' + str(state) + '\''
-    state = str(state)
-    if not state: return '???'
-    m = ugly_objectdesc.match(state)
+    if not state: return '...'
+    m = ugly_objectdesc.match(str(state))
     if m: return m.group(1)
-    return state
+    return str(state)# + ' ' + str(type(state))
 
-INITIAL_S = '(jopa '
+INITIAL_S = '('
 
 def main():
     s = INITIAL_S
@@ -94,10 +98,10 @@ def main():
         try:
             i = Interactive(s)
             i.main()
-        except BackspaceException, e: pass
+        except BackspaceException, e: s = i.h
+        except EnterException, e: s = INITIAL_S
         except Exception, e:
             print 'E', type(e), e.message
-        finally:
             s = i.h
 
 if __name__ == '__main__': main()
