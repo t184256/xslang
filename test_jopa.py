@@ -27,7 +27,12 @@ TESTS = (
      'jopa root package'),
     ("(jopa context set hi (jopa string literal (Hello)) hi)", 'Hello'),
     ("(jopa operator ident jopa)",
-     'jopa root package')
+     'jopa root package'),
+    ("""(jopa string create
+         (jopa string lbrace)
+         hi
+         (jopa string rbrace)
+        )""", "(hi)"),
 )
 
 if __name__ == '__main__':

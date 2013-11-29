@@ -208,6 +208,8 @@ jopa_ro = JOPAObjectPackage('jopa root package', {
         'create': JOPAString(),
         'space': JOPAString(' '),
         'tab': JOPAString('\t'),
+        'lbrace': JOPAString('('),
+        'rbrace': JOPAString(')'),
         'newline': JOPAString('\n'),
         'literal': JOPAString(takes_literal=True),
     })
