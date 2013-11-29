@@ -42,6 +42,7 @@ class JOPABrace(JOPAObject):
         if not rootobj is None: self.context['jopa'] = rootobj
         self.parent = parent
         self.string = ''
+        self.exposed_current_state = None
 
     def __getitem__(self, n, maxdepth=-1):
         if n in self.context: return self.context[n]
@@ -96,10 +97,12 @@ class JOPABrace(JOPAObject):
             if f in self: f = self[f]
             else:
                 raise Exception("Uncallable literal '%s' starts the brace" % f)
+        self.exposed_current_state = f
         while True:
             a = self.read_one()
             if a is None: break
             f = self.apply(f, a)
+            self.exposed_current_state = f
         return f
 
     def read_one(self):
