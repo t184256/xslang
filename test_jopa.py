@@ -48,15 +48,31 @@ TESTS = (
     ("""(jopa context set x (jopa string literal hello)
          jopa context set y (jopa string literal world)
          jopa string create x y)""", "helloworld"),
+    ("""(jopa operator ternary (jopa bool false)
+         (an erroroneous code) (jopa string create fl))""",  "fl"),
+    ("""(jopa operator ternary (jopa bool true)
+         (jopa string create tr) (an erroroneous code))""",  "tr"),
+    ("""(jopa operator ternary (jopa bool false)
+         (jopa operator uncallable jopa) (jopa string create fl))""",  "fl"),
+    ("""(jopa operator ternary (jopa bool true)
+         (jopa string create tr) (jopa operator uncallable jopa))""",  "tr"),
+    ("(jopa string literal (jopa operator uncallable jopa))",
+     "jopa operator uncallable jopa"),
+    ("""(jopa operator ternary
+           (jopa string equal (jopa string create hi) (jopa string literal hi))
+         (jopa string create tr) (an erroroneous code))""",  "tr"),
+#    ("(jopa syntax enable square_brackets [jopa])",          ""),
 )
 
 if __name__ == '__main__':
     for c, r in TESTS:
-        e = simple_eval(c, eager=True)
-        ee = simple_eval(c, eager=False)
-        if not (str(ee) == r and str(e) == r):
+        try:
+            e = simple_eval(c)
+        except Exception, e:
+            print 'WHILE EVALUATING "%s"' % c
+            print e
+        if not str(e) == r:
             print 'A test failed:            ', c
             print 'Evaluation returned:      ', e
-            print 'Eager evaluation returned:', ee
             print 'Expected:                 ', r
 

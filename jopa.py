@@ -24,6 +24,21 @@ class JOPAObject(object):
 
 class JOPARuntimeException(Exception): pass
 
+class TranslateMapSource(object):
+    def __init__(self, subsource, translate=None):
+        self.subsource, self.translate = subsource, translate
+    def peek(self): return self.translate(self.subsource.peek())
+    def __call__(self): return self.translate(self.subsource())
+
+SQMAP = {'(':'[', ')':']', '[':')', ']':')'}
+TranslateSquareBrackets = lambda ss: TranslateMapSource(ss,
+        lambda c: SQMAP[c] if c in SQMAP else c
+)
+
+TRANSFORMATIONS = {
+    'square_brackets': TranslateSquareBrackets
+}
+
 class StringSource(object):
     def __init__(self, code):
         self._str = code
@@ -43,7 +58,7 @@ class JOPABrace(JOPAObject):
         self.context = {}
         if not rootobj is None: self.context['jopa'] = rootobj
         self.parent = parent
-        self.string = ''
+        self.string = None
         self.exposed_current_state = None
 
     def __getitem__(self, n, maxdepth=-1):
@@ -57,57 +72,39 @@ class JOPABrace(JOPAObject):
         if not self.parent: return False
         return n in self.parent
 
-    def _parse(self):
-        """ Parses '(x y z) coming from source into a stored list [x, y, z] """
-        if '_parsed' in self.__dict__: return self
-        self._parsed = []
-        if not self.source() == '(': raise Exception('No (')
-        f = self.read_one()
-        if f is None: return self
-        if isinstance(f, JOPABrace): f = f._parse()
-        self._parsed.append(f)
-        while True:
-            a = self.read_one()
-            if isinstance(a, JOPABrace): a._parse()
-            if a is None: break
-            self._parsed.append(a)
+    def _suckup(self):
+        if not self.source() == '(': raise JOPARuntimeException('No (')
+        b = 1
+        while b or self.string is None:
+            c = self.getchar()
+            if c is None: raise JOPARuntimeException('Braces unbalanced')
+            if c == '(': b += 1
+            if c == ')': b -= 1
+        self.string = self.string[:-1]
         return self
 
     def eval(self):
-        """ Parses, then evaluates the brace, feeding the arguments into the
-        first one """
-        if not '_parsed' in self.__dict__: self._parse()
-        if not len(self._parsed): return JOPAObjectNone(self) # ()
-        f = self._parsed[0]
-        if isinstance(f, JOPABrace): f = f.eval()
-        if isinstance(f, str):
-            if f in self: f = self[f]
-            else:
-                raise Exception("Uncallable literal '%s' starts the brace" % f)
-        for a in self._parsed[1:]:
-            f = self.apply(f, a)
-        return f
-
-    def eval_eager(self):
         """ Eagerly evaluates with every single incoming byte """
-        if '_parsed' in self.__dict__: return self.eval()
+        if not self.string is None:
+            self.source = StringSource('(' + self.string + ')')
+            self.string = None
         if not self.source() == '(': raise Exception('No (')
         f = self.read_one()
         if f is None: return JOPAObjectNone(self) # ()
-        if isinstance(f, JOPABrace): f = f.eval_eager()
         if isinstance(f, str):
             if f in self: f = self[f]
             else:
                 raise Exception("Uncallable literal '%s' starts the brace" % f)
+        if isinstance(f, JOPABrace): f = f.eval()
         self.exposed_current_state = f
         while True:
-            a = self.read_one()
+            a = self.read_one(eager=(not f.takes_literal))
             if a is None: break
             f = self.apply(f, a)
             self.exposed_current_state = f
         return f
 
-    def read_one(self):
+    def read_one(self, eager=True):
         s = ''
         while self.source.peek().isspace(): self.getchar()
         if self.source.peek() == ')': self.source(); return None
@@ -117,6 +114,7 @@ class JOPABrace(JOPAObject):
             if c == '(':
                 new = JOPABrace(self.source, self)
                 self.exposed_current_state = new
+                if eager: new._suckup()
                 return new
             elif c.isspace(): break;
             elif c == ')': break;
@@ -125,26 +123,24 @@ class JOPABrace(JOPAObject):
         return s if len(s) else None
 
     def getchar(self):
+        if self.string is None: self.string = ''
         char = self.source()
-        self.string += char
+        if not char is None: self.string += char
         return char
 
     def apply(self, f, a):
         #print 'APPLY "%s" "%s"' % (f, a), f.takes_literal, type(a)
         if f.takes_literal:
             if isinstance(a, str): return f(JOPAString(a), self)
-            if isinstance(a, JOPABrace): return f(a._parse(), self)
+            if isinstance(a, JOPABrace): return f(a._suckup(), self)
             raise Exception("Unknown argument type for function of literal")
         else:
             if isinstance(a, str):
                 if a in self:
                     a = self[a]
-            if isinstance(a, JOPABrace):
-                if f.takes_literal:
-                    a = a._parse()
-                else:
-                    a.parent = self
-                    a = a.eval_eager()
+            elif isinstance(a, JOPABrace):
+                a.parent = self
+                a = a.eval()
         return f(a, self)
 
     def __call__(self, arg, brace):
@@ -194,9 +190,44 @@ class JOPAContextSet(JOPAObject):
         brace.context[self.name] = arg
         return JOPAIdent()
 
+class JOPASyntaxEnable(JOPAObject):
+    def __init__(self):
+        JOPAObject.__init__(self, takes_literal=True)
+    def __call__(self, arg, brace):
+        brace.source = TRANSFORMATIONS[str(arg)](brace.source)
+        print (brace.source)
+        return JOPAIdent()
+
 class JOPAIdent(JOPAObject):
     def __call__(self, arg, brace):
         return arg
+
+class JOPAIgnore(JOPAObject):
+    def __call__(self, arg, brace):
+        return self
+
+class JOPATernary(JOPAObject):
+    def __call__(self, arg, brace):
+        if not isinstance(arg, JOPABoolean):
+            raise JOPARuntimeException('Non-bool condition')
+        if isinstance(arg, JOPATrue):
+            return JOPAEvalNthLiteral(1, 2)
+        else:
+            return JOPAEvalNthLiteral(2, 2)
+
+class JOPAEvalNthLiteral(JOPAObject):
+    def __init__(self, n, all, i=None, answer=None):
+        JOPAObject.__init__(self, takes_literal=True)
+        if i is None: i = 1
+        self.i, self.n, self.all, self.answer = i, n, all, answer
+    def __call__(self, arg, brace):
+        if self.n == self.i:
+            self.answer = arg.eval()
+        if self.i == self.all:
+            assert(not self.answer is None)
+            return self.answer
+        return JOPAEvalNthLiteral(self.n, self.all, self.i + 1, self.answer)
+
 
 class JOPABoolean(JOPAObject): pass
 class JOPATrue(JOPABoolean):
@@ -220,9 +251,16 @@ class JOPAStringEqual(JOPAObject):
             raise JOPARuntimeException('jopa.string.equal requires 2nd string')
         return JOPABool(str(self._s) == str(arg))
 
+class JOPAUncallable(JOPAObject):
+    def __call__(self, arg, brace):
+        raise JOPARuntimeException('uncallable was called with "%s"' % str(arg))
+
+
 jopa_ro = JOPAObjectPackage('jopa root package', {
     'operator': JOPAObjectPackage('jopa.operator package', {
         'ident': JOPAIdent(),
+        'ternary': JOPATernary(),
+        'uncallable': JOPAUncallable(),
     }),
     'context': JOPAObjectPackage('jopa.context package', {
         'get': JOPAContextGet(),
@@ -241,17 +279,16 @@ jopa_ro = JOPAObjectPackage('jopa root package', {
         'space': JOPAString(' '),
         'tab': JOPAString('\t'),
         'newline': JOPAString('\n'),
-    })
+    }),
+    'syntax': JOPAObjectPackage('jopa.syntax package', {
+        'enable': JOPASyntaxEnable(),
+    }),
 })
 
 ### External interface ###
 
-def simple_eval(code, eager=True):
-    b = JOPABrace(code, rootobj=jopa_ro)
-    if eager:
-        return b.eval_eager()
-    else:
-        return b.eval()
+def simple_eval(code):
+    return JOPABrace(code, rootobj=jopa_ro).eval()
 
 def main():
     print simple_eval(raw_input())

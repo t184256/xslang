@@ -50,7 +50,7 @@ class Interactive(object):
     def prompt(self): return '! ' if self.interpreter_got_recreated else '> '
 
     def main(self):
-        self.b.eval_eager()
+        self.b.eval()
 
     def peek(self):
         return self.s[0]
