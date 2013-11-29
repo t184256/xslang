@@ -68,8 +68,9 @@ class Interactive(object):
             if l > 0:
                 print self.prompt() + wrote + ' ' * l + state
             else:
-                print self.prompt() + wrote
-                print state
+                print; print state
+                print; print self.prompt() + wrote
+                print; print
             self.interpreter_got_recreated = False
             c = getch()
             if ord(c) == 9: raise TabException()
