@@ -33,10 +33,10 @@ class StringSource(object):
         char = self._str[0]
         self._str = self._str[1:]
         return char
-    def preview(self): return self._str
 
 class JOPABrace(JOPAObject):
     def __init__(self, source, parent=None, rootobj=None):
+        if isinstance(source, str): source = StringSource(source)
         self.source = source
         self.context = {}
         if not rootobj is None: self.context['jopa'] = rootobj
@@ -156,6 +156,8 @@ class JOPAObjectPackage(JOPAObject):
         return self.dic[arg]
     def __str__(self):
         return self.name
+    def __getitem__(self, name): return self.dic.__getitem__(name)
+    def __setitem__(self, name, val): return self.dic.__getitem__(name, val)
 
 class JOPAString(JOPAObject):
     def __init__(self, initial_string=None, takes_literal=False):
@@ -177,7 +179,6 @@ jopa_ro = JOPAObjectPackage('jopa root package', {
 ### External interface ###
 
 def simple_eval(code, eager=True):
-    if isinstance(code, str): code = StringSource(code)
     b = JOPABrace(code, rootobj=jopa_ro)
     if eager:
         return b.eval_eager()
