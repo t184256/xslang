@@ -20,26 +20,6 @@ class JOPAObject(object):
     def __init__(self, takes_literal=False):
         self.takes_literal = takes_literal
 
-class JOPAObjectNone(JOPAObject): pass
-
-class JOPAObjectPackage(JOPAObject):
-    def __init__(self, name, dic):
-        JOPAObject.__init__(self)
-        self.dic, self.name = dic, name
-    def __call__(self, arg, brace):
-        return self.dic[arg]
-    def __str__(self):
-        return self.name
-
-class JOPAString(JOPAObject):
-    def __init__(self, initial_string=None, takes_literal=False):
-        JOPAObject.__init__(self, takes_literal=takes_literal)
-        self._str = initial_string or ''
-    def __call__(self, arg, brace):
-        return JOPAString(initial_string=(self._str + str(arg)))
-    def __str__(self):
-        return self._str
-
 ### The interpreter: the Brace ###
 
 class StringSource(object):
@@ -161,6 +141,28 @@ class JOPABrace(JOPAObject):
 
     def __str__(self): return self.string
 
+### Standard library ###
+
+class JOPAObjectNone(JOPAObject): pass
+
+class JOPAObjectPackage(JOPAObject):
+    def __init__(self, name, dic):
+        JOPAObject.__init__(self)
+        self.dic, self.name = dic, name
+    def __call__(self, arg, brace):
+        return self.dic[arg]
+    def __str__(self):
+        return self.name
+
+class JOPAString(JOPAObject):
+    def __init__(self, initial_string=None, takes_literal=False):
+        JOPAObject.__init__(self, takes_literal=takes_literal)
+        self._str = initial_string or ''
+    def __call__(self, arg, brace):
+        return JOPAString(initial_string=(self._str + str(arg)))
+    def __str__(self):
+        return self._str
+
 jopa_ro = JOPAObjectPackage('jopa root package', {
     'string': JOPAObjectPackage('jopa.string package', {
         'create': JOPAString(),
@@ -169,20 +171,17 @@ jopa_ro = JOPAObjectPackage('jopa root package', {
     })
 })
 
-#code = "(func1 arg1 (func2 arg2) () arg3 (func3 ()))"
-code = "(jopa string create Hello, (jopa string space) world!)"
-code = "(jopa string literal (Hello, world))"
-ss = StringSource(code)
+### External interface ###
 
-print 'parse'
-print JOPABrace(StringSource(code), rootobj=jopa_ro)._parse()._parsed
-print
+def simple_eval(code, eager=True):
+    b = JOPABrace(StringSource(code), rootobj=jopa_ro)
+    if eager:
+        return b.eval_eager()
+    else:
+        return b.eval()
 
-print 'eval'
-print JOPABrace(StringSource(code), rootobj=jopa_ro).eval()
-print
+def main():
+    print simple_eval(raw_input())
 
-print 'eval_eager'
-print JOPABrace(StringSource(code), rootobj=jopa_ro).eval_eager()
-print
+if __name__ == '__main__': main()
 
