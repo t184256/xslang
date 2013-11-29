@@ -62,7 +62,7 @@ class Interactive(object):
             return c
         else:
             wrote = self.h + self.s
-            state = prettyprint(self.b.exposed_current_state, self.b)
+            state = prettyprintstate(self.b)
             l = 80 - (len(self.prompt()) + len(wrote) + len(state))
             if l > 0:
                 print self.prompt() + wrote + ' ' * l + state
@@ -80,10 +80,10 @@ class Interactive(object):
 #           print "$ '%s' | '%s'" % (self.h, self.s)
             return out
 
-def prettyprint(state, b):
-    print b
+def prettyprintstate(b):
+    state = b.exposed_current_state
     if isinstance(state, JOPABrace):
-        return '(' + prettyprint(state.exposed_current_state, state) + ')'
+        return '(' + prettyprintstate(state.exposed_current_state, state) + ')'
     if isinstance(state, JOPAString): return '\'' + str(state) + '\''
     if not state: return '...'
     m = ugly_objectdesc.match(str(state))
