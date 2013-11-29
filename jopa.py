@@ -164,7 +164,20 @@ class JOPAString(JOPAObject):
     def __str__(self):
         return self._str
 
+class JOPAContextGet(JOPAObject):
+    def __init__(self):
+        JOPAObject.__init__(self)
+    def __call__(self, arg, brace):
+        if not isinstance(arg, JOPAString):
+            raise Exception('jopa.context.get requires a string')
+        return brace[str(arg)]
+
+
 jopa_ro = JOPAObjectPackage('jopa root package', {
+    'context': JOPAObjectPackage('jopa.context package', {
+        'get': JOPAContextGet(),
+#        'set': JOPAContextSetCreator(),
+    }),
     'string': JOPAObjectPackage('jopa.string package', {
         'create': JOPAString(),
         'space': JOPAString(' '),

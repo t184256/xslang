@@ -23,6 +23,8 @@ TESTS = (
     ("(jopa string literal (Hello, world!))",                  "Hello, world!"),
     ("(jopa string literal (\t))",                             "\t"),
     ("(jopa string create a (jopa string tab) b)",             "a\tb"),
+    ("(jopa context get (jopa string literal (jopa)))",
+     'jopa root package'),
 )
 
 if __name__ == '__main__':
