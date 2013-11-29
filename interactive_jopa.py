@@ -16,7 +16,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-from jopa import JOPABrace, JOPAString, jopa_ro
+from jopa import JOPABrace, JOPAString, JOPAObjectPackage, jopa_ro
 
 import sys, time, re
 
@@ -24,6 +24,7 @@ ugly_objectdesc = re.compile(r'<(\S*) object at .*>')
 
 class BackspaceException(Exception): pass
 class EnterException(Exception): pass
+class TabException(Exception): pass
 
 try:
     from msvcrt import getch
@@ -71,6 +72,7 @@ class Interactive(object):
                 print state
             self.interpreter_got_recreated = False
             c = getch()
+            if ord(c) == 9: raise TabException()
             if ord(c) == 13: raise EnterException()
             if ord(c) == 27: sys.exit(0)
             if ord(c) == 127: raise BackspaceException()
@@ -99,6 +101,12 @@ def main():
             i = Interactive(s)
             i.main()
         except BackspaceException, e: s = i.h
+        except TabException, e:
+            s = i.h + i.s
+            choices = i.b.context.keys()
+            if isinstance(i.b.exposed_current_state, JOPAObjectPackage):
+                choices = i.b.exposed_current_state.dic.keys() + choices
+            print ' '.join(choices)
         except EnterException, e: s = INITIAL_S
         except Exception, e:
             print 'E', type(e), e.message
