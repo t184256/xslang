@@ -156,8 +156,6 @@ class JOPAObjectPackage(JOPAObject):
         return self.dic[arg]
     def __str__(self):
         return self.name
-    def __getitem__(self, name): return self.dic.__getitem__(name)
-    def __setitem__(self, name, val): return self.dic.__getitem__(name, val)
 
 class JOPAString(JOPAObject):
     def __init__(self, initial_string=None, takes_literal=False):
