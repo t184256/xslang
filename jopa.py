@@ -226,14 +226,13 @@ def JOPAIdent(arg, brace): return arg
 def JOPAIgnore(arg, brace): return JOPAIdent
 
 @jopa_function('jopa.operator.ternary')
-class JOPATernary(JOPAObject):
-    def __call__(self, arg, brace):
-        if not isinstance(arg, JOPABoolean):
-            raise JOPAException('Non-bool condition')
-        if isinstance(arg, JOPATrue):
-            return JOPAEvalNthLiteral(1, 2)
-        else:
-            return JOPAEvalNthLiteral(2, 2)
+def JOPATernary(arg, brace):
+    if not isinstance(arg, JOPABoolean):
+        raise JOPAException('Non-bool condition')
+    if isinstance(arg, JOPATrue):
+        return JOPAEvalNthLiteral(1, 2)
+    else:
+        return JOPAEvalNthLiteral(2, 2)
 
 class JOPAEvalNthLiteral(JOPAObject):
     def __init__(self, n, all, i=None, answer=None):
@@ -320,7 +319,7 @@ jopa_ro = JOPAObjectPackage('jopa root package', {
     'operator': JOPAObjectPackage('jopa.operator package', {
         'ident': JOPAIdent,
         'ignore': JOPAIgnore,
-        'ternary': JOPATernary(),
+        'ternary': JOPATernary,
         'uncallable': JOPAUncallable(),
     }),
     'function': JOPAObjectPackage('jopa.function package', {
