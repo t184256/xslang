@@ -308,13 +308,6 @@ jopa_ro = JOPAObjectPackage('jopa root package', {
     }),
 })
 
-### External interface ###
-
-def simple_eval(code):
-    return JOPABrace(code, rootobj=jopa_ro).eval()
-
-def main():
-    print simple_eval(raw_input())
-
+def main(): print JOPABrace(raw_input, rootobj=jopa_ro).eval()
 if __name__ == '__main__': main()
 

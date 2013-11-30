@@ -16,7 +16,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-from jopa import JOPABrace, JOPAString, JOPAObjectPackage, CollectArgs
+from jopa import JOPABrace, JOPAString, JOPAObjectPackage
 from jopa import JOPAException
 from jopa import jopa_ro
 
@@ -95,10 +95,6 @@ def prettyprintstate(b):
     if isinstance(state, JOPABrace):
         return '(' + shorten(prettyprintstate(state), 40) + ')'
     if isinstance(state, JOPAString): return '\'' + shorten(state, 40) + '\''
-    if isinstance(state, CollectArgs):
-        return str(state) + ' ' + ' '.join([
-                shorten(argname, 10) + '=(' + shorten(val, 16) + ')'
-                for argname, val in state.args.items()])
     if not state: return '...'
     m = ugly_objectdesc.match(str(state))
     if m: return m.group(1)
