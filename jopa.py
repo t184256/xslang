@@ -152,17 +152,30 @@ class JOPABrace(JOPAObject):
 
 ### Utility decorators for defining python functions
 
-def named(n):
-    def name(func):
-        func.__str__ = types.MethodType(
-                (lambda self: n), func, func.__class__
-        )
+def jopa_function(name=None, takes_literal=False):
+    def transform(func):
+        func.takes_literal = takes_literal
+        if name is not None:
+            func.__str__ = types.MethodType((lambda s: n), func, func.__class__)
         return func
-    return name
+    return transform
 
-def takes_literal(func):
-    func.takes_literal = True
-    return func
+def takes_additional_arg(argname, literal=False, verificator=None):
+    def transform(func):
+        @jopa_function(str(func), takes_literal=literal)
+        def PartiallyApplied(addn_arg, brace):
+            if verificator is not None:
+                r = verificator(addn_arg)
+                if not r == True: raise JOPARuntimeException(r)
+            @jopa_function(str(func), takes_literal=func.takes_literal)
+            def ProxyFunc(arg, brace, *args, **kwargs):
+                kwargs[argname] = addn_arg
+                return func(arg, brace, *args, **kwargs)
+            return ProxyFunc
+        return PartiallyApplied
+    return transform
+
+isstring = lambda s: isinstance (s, JOPAString) or 'argument is not a string'
 
 ### Standard library ###
 
@@ -186,14 +199,15 @@ class JOPAString(JOPAObject):
     def __str__(self):
         return self._str
 
-@named('jopa.context.get')
+@jopa_function('jopa.context.get')
 class JOPAContextGet(JOPAObject):
     def __call__(self, arg, brace):
         if not isinstance(arg, JOPAString):
             raise Exception('jopa.context.get requires a string')
         return brace[str(arg)]
 
-JOPAContextSetCreator = takes_literal(lambda a, b: JOPAContextSet(str(a)))
+@jopa_function('jopa.context.set', takes_literal=True)
+def JOPAContextSetCreator(a, b): return JOPAContextSet(str(a))
 class JOPAContextSet(JOPAObject):
     def __init__(self, name):
         JOPAObject.__init__(self)
@@ -202,7 +216,7 @@ class JOPAContextSet(JOPAObject):
         brace.context[self.name] = arg
         return JOPAIdent()
 
-@named('jopa.syntax.enable')
+@jopa_function('jopa.syntax.enable')
 class JOPASyntaxEnable(JOPAObject):
     def __init__(self):
         JOPAObject.__init__(self, takes_literal=True)
@@ -211,17 +225,17 @@ class JOPASyntaxEnable(JOPAObject):
         print (brace.source)
         return JOPAIdent()
 
-@named('jopa.operator.ident')
+@jopa_function('jopa.operator.ident')
 class JOPAIdent(JOPAObject):
     def __call__(self, arg, brace):
         return arg
 
-@named('jopa.operator.ignore')
+@jopa_function('jopa.operator.ignore')
 class JOPAIgnore(JOPAObject):
     def __call__(self, arg, brace):
         return self
 
-@named('jopa.operator.ternary')
+@jopa_function('jopa.operator.ternary')
 class JOPATernary(JOPAObject):
     def __call__(self, arg, brace):
         if not isinstance(arg, JOPABoolean):
@@ -306,6 +320,11 @@ class JOPAUncallable(JOPAObject):
     def __call__(self, arg, brace):
         raise JOPARuntimeException('uncallable was called with "%s"' % str(arg))
 
+@takes_additional_arg('surr', verificator=isstring)
+@jopa_function('jopa.string.surround')
+def JOPAStringSurround(arg, brace, surr=None):
+    return JOPAString(str(surr) + str(arg) + str(surr))
+
 
 jopa_ro = JOPAObjectPackage('jopa root package', {
     'operator': JOPAObjectPackage('jopa.operator package', {
@@ -329,6 +348,7 @@ jopa_ro = JOPAObjectPackage('jopa root package', {
         'create': JOPAString(),
         'literal': JOPAString(takes_literal=True),
         'equal': JOPAStringEqualCreator(),
+        'surround': JOPAStringSurround,
         'lbrace': JOPAString('('),
         'rbrace': JOPAString(')'),
         'space': JOPAString(' '),
