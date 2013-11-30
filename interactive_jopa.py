@@ -17,7 +17,7 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 from jopa import JOPABrace, JOPAString, JOPAObjectPackage, CollectArgs
-from jopa import JOPARuntimeException
+from jopa import JOPAException
 from jopa import jopa_ro
 
 import sys, time, re, traceback
@@ -125,7 +125,7 @@ def main():
             else:
                 print ' '.join(choices)
         except EnterException, e: s = INITIAL_S
-        except JOPARuntimeException, e:
+        except JOPAException, e:
             print 'E', e
             s = i.h
         except Exception, e:

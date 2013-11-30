@@ -24,7 +24,7 @@ class JOPAObject(object):
 
 ### The interpreter: the Brace ###
 
-class JOPARuntimeException(Exception): pass
+class JOPAException(Exception): pass
 
 class TranslateMapSource(object):
     def __init__(self, subsource, translate=None):
@@ -65,8 +65,8 @@ class JOPABrace(JOPAObject):
 
     def __getitem__(self, n, maxdepth=-1):
         if n in self.context: return self.context[n]
-        if not self.parent: raise Exception(n + ' not found!')
-        if maxdepth == 0: raise Exception(n + ' not found here!')
+        if not self.parent: raise JOPAException(n + ' not found!')
+        if maxdepth == 0: raise JOPAException(n + ' not found here!')
         return self.parent.__getitem__(n, maxdepth - 1)
 
     def __contains__(self, n):
@@ -75,11 +75,11 @@ class JOPABrace(JOPAObject):
         return n in self.parent
 
     def _suckup(self):
-        if not self.source() == '(': raise JOPARuntimeException('No (')
+        if not self.source() == '(': raise JOPAException('No (')
         b = 1
         while b or self.string is None:
             c = self.getchar()
-            if c is None: raise JOPARuntimeException('Braces unbalanced')
+            if c is None: raise JOPAException('Unbalanced braces')
             if c == '(': b += 1
             if c == ')': b -= 1
         self.string = self.string[:-1]
@@ -90,13 +90,13 @@ class JOPABrace(JOPAObject):
         if not self.string is None:
             self.source = StringSource('(' + self.string + ')')
             self.string = None
-        if not self.source() == '(': raise Exception('No (')
+        if not self.source() == '(': raise JOPAException('No (')
         f = self.read_one()
         if f is None: return JOPAObjectNone(self) # ()
         if isinstance(f, str):
             if f in self: f = self[f]
             else:
-                raise Exception("Uncallable literal '%s' starts the brace" % f)
+                raise JOPAException("Uncallable '%s' begins the brace" % f)
         if isinstance(f, JOPABrace): f = f.eval()
         self.exposed_current_state = f
         while True:
@@ -112,7 +112,7 @@ class JOPABrace(JOPAObject):
         if self.source.peek() == ')': self.source(); return None
         while True:
             c = self.source.peek()
-            if not c: raise Exception('Premature end of source')
+            if not c: raise JOPAException('Premature end of source')
             if c == '(':
                 new = JOPABrace(self.source, self)
                 if eager: new._suckup()
@@ -135,7 +135,7 @@ class JOPABrace(JOPAObject):
         if f.takes_literal:
             if isinstance(a, str): return f(JOPAString(a), self)
             if isinstance(a, JOPABrace): return f(a._suckup(), self)
-            raise Exception("Unknown argument type for function of literal")
+            raise JOPAException("Unknown argument type for function of literal")
         else:
             if isinstance(a, str):
                 if a in self:
@@ -165,7 +165,7 @@ def takes_additional_arg(argname, literal=False, verificator=None):
         def PartiallyApplied(addn_arg, brace):
             if verificator is not None:
                 r = verificator(addn_arg)
-                if not r == True: raise JOPARuntimeException(r)
+                if not r == True: raise JOPAException(r)
             @jopa_function(str(func), takes_literal=func.takes_literal)
             def ProxyFunc(arg, brace, *args, **kwargs):
                 kwargs[argname] = addn_arg
@@ -202,7 +202,7 @@ class JOPAString(JOPAObject):
 class JOPAContextGet(JOPAObject):
     def __call__(self, arg, brace):
         if not isinstance(arg, JOPAString):
-            raise Exception('jopa.context.get requires a string')
+            raise JOPAException('jopa.context.get requires a string')
         return brace[str(arg)]
 
 @takes_additional_arg('valname', literal=True)
@@ -234,7 +234,7 @@ class JOPAIgnore(JOPAObject):
 class JOPATernary(JOPAObject):
     def __call__(self, arg, brace):
         if not isinstance(arg, JOPABoolean):
-            raise JOPARuntimeException('Non-bool condition')
+            raise JOPAException('Non-bool condition')
         if isinstance(arg, JOPATrue):
             return JOPAEvalNthLiteral(1, 2)
         else:
@@ -299,7 +299,7 @@ def JOPABool(obj): return JOPATrue() if obj else JOPAFalse()
 class JOPAStringEqualCreator(JOPAObject):
     def __call__(self, arg, brace):
         if not isinstance(arg, JOPAString):
-            raise JOPARuntimeException('jopa.string.equal requires 1st string')
+            raise JOPAException('jopa.string.equal requires 1st string')
         return JOPAStringEqual(arg)
 
 class JOPAStringEqual(JOPAObject):
@@ -308,12 +308,12 @@ class JOPAStringEqual(JOPAObject):
         self._s = s
     def __call__(self, arg, brace):
         if not isinstance(arg, JOPAString):
-            raise JOPARuntimeException('jopa.string.equal requires 2nd string')
+            raise JOPAException('jopa.string.equal requires 2nd string')
         return JOPABool(str(self._s) == str(arg))
 
 class JOPAUncallable(JOPAObject):
     def __call__(self, arg, brace):
-        raise JOPARuntimeException('uncallable was called with "%s"' % str(arg))
+        raise JOPAException('uncallable was called with "%s"' % str(arg))
 
 @takes_additional_arg('surr', verificator=isstring)
 @jopa_function('jopa.string.surround')
