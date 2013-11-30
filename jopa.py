@@ -22,6 +22,14 @@ class JOPAObject(object):
     def __init__(self, takes_literal=False):
         self.takes_literal = takes_literal
 
+class JOPAObjectNone(JOPAObject): pass
+class JOPABoolean(JOPAObject): pass
+class JOPATrue(JOPABoolean):
+    def __str__(self): return 'true'
+class JOPAFalse(JOPABoolean):
+    def __str__(self): return 'false'
+def JOPABool(obj): return JOPATrue() if obj else JOPAFalse()
+
 ### The interpreter: the Brace ###
 
 class JOPAException(Exception): pass
@@ -174,8 +182,6 @@ isstring = lambda s: isinstance (s, JOPAString) or 'argument is not a string'
 
 ### Standard library ###
 
-class JOPAObjectNone(JOPAObject): pass
-
 class JOPAObjectPackage(JOPAObject):
     def __init__(self, name, dic):
         JOPAObject.__init__(self)
@@ -278,13 +284,6 @@ def JOPAFunctionOf_(arg, brace, function=None, argname=None):
         return function.eval()
 JOPAFunctionOf = CollectArgs(JOPAFunctionOf_, \
     ((('argname', True), ('function', True))), 'jopa.function.of')
-
-class JOPABoolean(JOPAObject): pass
-class JOPATrue(JOPABoolean):
-    def __str__(self): return 'true'
-class JOPAFalse(JOPABoolean):
-    def __str__(self): return 'false'
-def JOPABool(obj): return JOPATrue() if obj else JOPAFalse()
 
 @takes_additional_arg('string1', verificator=isstring)
 @jopa_function('jopa.string.equal')
