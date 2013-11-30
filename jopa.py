@@ -199,11 +199,10 @@ class JOPAString(JOPAObject):
         return self._str
 
 @jopa_function('jopa.context.get')
-class JOPAContextGet(JOPAObject):
-    def __call__(self, arg, brace):
-        if not isinstance(arg, JOPAString):
-            raise JOPAException('jopa.context.get requires a string')
-        return brace[str(arg)]
+def JOPAContextGet(arg, brace):
+    if not isinstance(arg, JOPAString):
+        raise JOPAException('jopa.context.get requires a string')
+    return brace[str(arg)]
 
 @takes_additional_arg('valname', literal=True)
 @jopa_function('jopa.context.set')
@@ -332,7 +331,7 @@ jopa_ro = JOPAObjectPackage('jopa root package', {
         'of': JOPAFunctionOf,
     }),
     'context': JOPAObjectPackage('jopa.context package', {
-        'get': JOPAContextGet(),
+        'get': JOPAContextGet,
         'set': JOPAContextSet,
     }),
     'bool': JOPAObjectPackage('jopa.bool package', {
