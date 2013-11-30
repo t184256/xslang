@@ -208,7 +208,7 @@ def JOPAContextGet(arg, brace):
 @jopa_function('jopa.context.set')
 def JOPAContextSet(arg, brace, valname=None):
     brace.context[str(valname)] = arg
-    return JOPAIdent()
+    return JOPAIdent
 
 @jopa_function('jopa.syntax.enable')
 class JOPASyntaxEnable(JOPAObject):
@@ -217,17 +217,13 @@ class JOPASyntaxEnable(JOPAObject):
     def __call__(self, arg, brace):
         brace.source = TRANSFORMATIONS[str(arg)](brace.source)
         print (brace.source)
-        return JOPAIdent()
+        return JOPAIdent
 
 @jopa_function('jopa.operator.ident')
-class JOPAIdent(JOPAObject):
-    def __call__(self, arg, brace):
-        return arg
+def JOPAIdent(arg, brace): return arg
 
 @jopa_function('jopa.operator.ignore')
-class JOPAIgnore(JOPAObject):
-    def __call__(self, arg, brace):
-        return self
+def JOPAIgnore(arg, brace): return JOPAIdent
 
 @jopa_function('jopa.operator.ternary')
 class JOPATernary(JOPAObject):
@@ -322,8 +318,8 @@ def JOPAStringSurround(arg, brace, surr=None):
 
 jopa_ro = JOPAObjectPackage('jopa root package', {
     'operator': JOPAObjectPackage('jopa.operator package', {
-        'ident': JOPAIdent(),
-        'ignore': JOPAIgnore(),
+        'ident': JOPAIdent,
+        'ignore': JOPAIgnore,
         'ternary': JOPATernary(),
         'uncallable': JOPAUncallable(),
     }),
