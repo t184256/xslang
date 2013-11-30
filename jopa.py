@@ -152,12 +152,11 @@ class JOPABrace(JOPAObject):
 
 ### Utility decorators for defining python functions
 
-def jopa_function(name=None, takes_literal=False):
-    def transform(func):
-        func.takes_literal = takes_literal
-        if name is not None:
-            func.__str__ = types.MethodType((lambda s: n), func, func.__class__)
-        return func
+def jopa_function(name, takes_literal=False):
+    def transform(f):
+        f.takes_literal = takes_literal
+        f.__str__ = types.MethodType((lambda s: name), f, f.__class__)
+        return f
     return transform
 
 def takes_additional_arg(argname, literal=False, verificator=None):
@@ -206,15 +205,11 @@ class JOPAContextGet(JOPAObject):
             raise Exception('jopa.context.get requires a string')
         return brace[str(arg)]
 
-@jopa_function('jopa.context.set', takes_literal=True)
-def JOPAContextSetCreator(a, b): return JOPAContextSet(str(a))
-class JOPAContextSet(JOPAObject):
-    def __init__(self, name):
-        JOPAObject.__init__(self)
-        self.name = name
-    def __call__(self, arg, brace):
-        brace.context[self.name] = arg
-        return JOPAIdent()
+@takes_additional_arg('valname', literal=True)
+@jopa_function('jopa.context.set')
+def JOPAContextSet(arg, brace, valname=None):
+    brace.context[str(valname)] = arg
+    return JOPAIdent()
 
 @jopa_function('jopa.syntax.enable')
 class JOPASyntaxEnable(JOPAObject):
@@ -338,7 +333,7 @@ jopa_ro = JOPAObjectPackage('jopa root package', {
     }),
     'context': JOPAObjectPackage('jopa.context package', {
         'get': JOPAContextGet(),
-        'set': JOPAContextSetCreator,
+        'set': JOPAContextSet,
     }),
     'bool': JOPAObjectPackage('jopa.bool package', {
         'true': JOPATrue(),
