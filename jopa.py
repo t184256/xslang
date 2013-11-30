@@ -290,20 +290,12 @@ class JOPAFalse(JOPABoolean):
     def __str__(self): return 'false'
 def JOPABool(obj): return JOPATrue() if obj else JOPAFalse()
 
-class JOPAStringEqualCreator(JOPAObject):
-    def __call__(self, arg, brace):
-        if not isinstance(arg, JOPAString):
-            raise JOPAException('jopa.string.equal requires 1st string')
-        return JOPAStringEqual(arg)
-
-class JOPAStringEqual(JOPAObject):
-    def __init__(self, s):
-        JOPAObject.__init__(self)
-        self._s = s
-    def __call__(self, arg, brace):
-        if not isinstance(arg, JOPAString):
-            raise JOPAException('jopa.string.equal requires 2nd string')
-        return JOPABool(str(self._s) == str(arg))
+@takes_additional_arg('string1', verificator=isstring)
+@jopa_function('jopa.string.equal')
+def JOPAStringEqual(string2, brace, string1):
+    if not isinstance(string2, JOPAString):
+        raise JOPAException('jopa.string.equal requires 2nd string')
+    return JOPABool(str(string1) == str(string2))
 
 @jopa_function('jopa.operator.uncallable')
 def JOPAUncallable(arg, brace):
@@ -336,7 +328,7 @@ jopa_ro = JOPAObjectPackage('jopa root package', {
     'string': JOPAObjectPackage('jopa.string package', {
         'create': JOPAString(),
         'literal': JOPAString(takes_literal=True),
-        'equal': JOPAStringEqualCreator(),
+        'equal': JOPAStringEqual,
         'surround': JOPAStringSurround,
         'lbrace': JOPAString('('),
         'rbrace': JOPAString(')'),
