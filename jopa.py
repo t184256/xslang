@@ -186,6 +186,7 @@ class JOPAString(JOPAObject):
     def __str__(self):
         return self._str
 
+@named('jopa.context.get')
 class JOPAContextGet(JOPAObject):
     def __call__(self, arg, brace):
         if not isinstance(arg, JOPAString):
@@ -201,6 +202,7 @@ class JOPAContextSet(JOPAObject):
         brace.context[self.name] = arg
         return JOPAIdent()
 
+@named('jopa.syntax.enable')
 class JOPASyntaxEnable(JOPAObject):
     def __init__(self):
         JOPAObject.__init__(self, takes_literal=True)
@@ -219,6 +221,7 @@ class JOPAIgnore(JOPAObject):
     def __call__(self, arg, brace):
         return self
 
+@named('jopa.operators.ternary')
 class JOPATernary(JOPAObject):
     def __call__(self, arg, brace):
         if not isinstance(arg, JOPABoolean):
