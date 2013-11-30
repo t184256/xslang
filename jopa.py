@@ -305,9 +305,9 @@ class JOPAStringEqual(JOPAObject):
             raise JOPAException('jopa.string.equal requires 2nd string')
         return JOPABool(str(self._s) == str(arg))
 
-class JOPAUncallable(JOPAObject):
-    def __call__(self, arg, brace):
-        raise JOPAException('uncallable was called with "%s"' % str(arg))
+@jopa_function('jopa.operator.uncallable')
+def JOPAUncallable(arg, brace):
+    raise JOPAException('uncallable was called with "%s"' % str(arg))
 
 @takes_additional_arg('surr', verificator=isstring)
 @jopa_function('jopa.string.surround')
@@ -320,7 +320,7 @@ jopa_ro = JOPAObjectPackage('jopa root package', {
         'ident': JOPAIdent,
         'ignore': JOPAIgnore,
         'ternary': JOPATernary,
-        'uncallable': JOPAUncallable(),
+        'uncallable': JOPAUncallable,
     }),
     'function': JOPAObjectPackage('jopa.function package', {
         'of': JOPAFunctionOf,
