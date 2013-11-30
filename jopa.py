@@ -166,13 +166,14 @@ def jopa_function(name, takes_literal=False):
 def takes_additional_arg(argname, literal=False, verificator=None):
     def transform(func):
         @jopa_function(str(func), takes_literal=literal)
-        def PartiallyApplied(addn_arg, brace):
+        def PartiallyApplied(addn_arg, brace, **more_args):
             if verificator is not None:
                 r = verificator(addn_arg)
                 if not r == True: raise JOPAException(r)
             @jopa_function(str(func), takes_literal=func.takes_literal)
             def ProxyFunc(arg, brace, *args, **kwargs):
                 kwargs[argname] = addn_arg
+                kwargs.update(more_args)
                 return func(arg, brace, *args, **kwargs)
             return ProxyFunc
         return PartiallyApplied
@@ -249,41 +250,12 @@ class JOPAEvalNthLiteral(JOPAObject):
             return self.answer
         return JOPAEvalNthLiteral(self.n, self.all, self.i + 1, self.answer)
 
-class CollectArgs(JOPAObject):
-    """
-    Takes a function and creates a thing that consumes multiple args,
-    once it collects them, the function gets called.
-    Example: (cls=JOPAFunction, lst=(('argname', True), ('function', True))
-    Consumes a literal, calls it 'argname', then a literal 'function',
-    then instantiates JOPAFunction with argname and function
-    """
-    def __init__(self, fun, lst, func_name=None, args=None,
-                 last_takes_literal=False):
-        JOPAObject.__init__(self, takes_literal=(
-                lst[0][1] if lst else last_takes_literal))
-        self.fun, self.lst = fun, lst
-        self.args = args or {}
-        self.func_name = func_name or 'arguments collector'
-    def __call__(self, arg, brace):
-        if not self.lst: return self.fun(arg, brace, **self.args)
-        argname, literal = self.lst[0]
-        lst = self.lst[1:]
-        args = self.args
-        args[argname] = arg
-        return CollectArgs(self.fun, lst, self.func_name, args)
-    def __str__(self): return self.func_name
-
-#def takes_additional_arg(argname, literal=False):
-#    return lambda func: CollectArgs(func, ((argname, literal),))
-#rewrite simpler, W/o CollectArgs
-
-#@takes_additional_arg('argname', True)
-#@takes_additional_arg('function', True)
-def JOPAFunctionOf_(arg, brace, function=None, argname=None):
+@takes_additional_arg('argname', literal=True)
+@takes_additional_arg('function', literal=True)
+@jopa_function('jopa.function.of')
+def JOPAFunctionOf(arg, brace, function=None, argname=None):
         function.context[str(argname)] = arg
         return function.eval()
-JOPAFunctionOf = CollectArgs(JOPAFunctionOf_, \
-    ((('argname', True), ('function', True))), 'jopa.function.of')
 
 @takes_additional_arg('string1', verificator=isstring)
 @jopa_function('jopa.string.equal')
