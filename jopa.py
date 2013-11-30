@@ -56,10 +56,9 @@ class StringSource(object):
 class JOPABrace(JOPAObject):
     def __init__(self, source, parent=None, rootobj=None):
         if isinstance(source, str): source = StringSource(source)
-        self.source = source
+        self.source, self.parent = source, parent
         self.context = {}
         if not rootobj is None: self.context['jopa'] = rootobj
-        self.parent = parent
         self.string = None
         self.exposed_current_state = None
 
@@ -95,8 +94,7 @@ class JOPABrace(JOPAObject):
         if f is None: return JOPAObjectNone(self) # ()
         if isinstance(f, str):
             if f in self: f = self[f]
-            else:
-                raise JOPAException("Uncallable '%s' begins the brace" % f)
+            else: raise JOPAException("Uncallable '%s' begins the brace" % f)
         if isinstance(f, JOPABrace): f = f.eval()
         self.exposed_current_state = f
         while True:
@@ -120,8 +118,7 @@ class JOPABrace(JOPAObject):
                 return new
             elif c.isspace(): break;
             elif c == ')': break;
-            else:
-                s += self.getchar()
+            else: s += self.getchar()
         return s if len(s) else None
 
     def getchar(self):
@@ -138,8 +135,7 @@ class JOPABrace(JOPAObject):
             raise JOPAException("Unknown argument type for function of literal")
         else:
             if isinstance(a, str):
-                if a in self:
-                    a = self[a]
+                if a in self: a = self[a]
             elif isinstance(a, JOPABrace):
                 a.parent = self
                 a = a.eval()
