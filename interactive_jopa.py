@@ -17,9 +17,10 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 from jopa import JOPABrace, JOPAString, JOPAObjectPackage, CollectArgs
+from jopa import JOPARuntimeException
 from jopa import jopa_ro
 
-import sys, time, re
+import sys, time, re, traceback
 
 ugly_objectdesc = re.compile(r'<(\S*) object at .*>')
 
@@ -124,8 +125,11 @@ def main():
             else:
                 print ' '.join(choices)
         except EnterException, e: s = INITIAL_S
+        except JOPARuntimeException, e:
+            print 'E', e
+            s = i.h
         except Exception, e:
-            print 'E', type(e), e.message
+            print 'E', traceback.format_exc(e)
             s = i.h
 
 if __name__ == '__main__': main()

@@ -17,6 +17,7 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 from jopa import simple_eval
+import traceback
 
 TESTS = (
     ("(jopa string create Hello, (jopa string space) world!)", "Hello, world!"),
@@ -74,10 +75,11 @@ TESTS = (
 
 if __name__ == '__main__':
     for c, r in TESTS:
-        #try:
-        e = simple_eval(c)
-        #except Exception, e:
-        #    print 'WHILE EVALUATING "%s"' % c
+        try:
+            e = simple_eval(c)
+        except Exception, e:
+            print 'WHILE EVALUATING "%s"' % c
+            print traceback.format_exc(e)
         if not str(e) == r:
             print 'A test failed:            ', c
             print 'Evaluation returned:      ', e
