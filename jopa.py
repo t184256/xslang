@@ -115,8 +115,8 @@ class JOPABrace(JOPAObject):
             if not c: raise JOPAException('Premature end of source')
             if c == '(':
                 new = JOPABrace(self.source, self)
-                if eager: new._suckup()
                 self.exposed_current_state = new
+                if eager: new._suckup()
                 return new
             elif c.isspace(): break;
             elif c == ')': break;
