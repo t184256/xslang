@@ -61,16 +61,23 @@ TESTS = (
     ("""(jopa operator ternary
            (jopa string equal (jopa string create hi) (jopa string literal hi))
          (jopa string create tr) (an erroroneous code))""",  "tr"),
+    ("(jopa function of x (jopa string create oh x !) dear)","ohdear!"),
+    ("""(jopa context set cc
+         (jopa function of x
+          (jopa function of y
+           (jopa string create a x b y c)
+          )
+         )
+        cc (jopa string create 1) (jopa string create 2))""","a1b2c"),
 #    ("(jopa syntax enable square_brackets [jopa])",          ""),
 )
 
 if __name__ == '__main__':
     for c, r in TESTS:
-        try:
-            e = simple_eval(c)
-        except Exception, e:
-            print 'WHILE EVALUATING "%s"' % c
-            print e
+        #try:
+        e = simple_eval(c)
+        #except Exception, e:
+        #    print 'WHILE EVALUATING "%s"' % c
         if not str(e) == r:
             print 'A test failed:            ', c
             print 'Evaluation returned:      ', e

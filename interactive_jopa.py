@@ -16,7 +16,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-from jopa import JOPABrace, JOPAString, JOPAObjectPackage, jopa_ro
+from jopa import JOPABrace, JOPAString, JOPAObjectPackage, CollectArgs
+from jopa import jopa_ro
 
 import sys, time, re
 
@@ -83,11 +84,20 @@ class Interactive(object):
 #           print "$ '%s' | '%s'" % (self.h, self.s)
             return out
 
+def shorten(s, maxlen):
+    s = str(s)
+    if len(s) <= maxlen: return s
+    return s[:maxlen - 3] + '..' + s[-1]
+
 def prettyprintstate(b):
     state = b.exposed_current_state
     if isinstance(state, JOPABrace):
-        return '(' + prettyprintstate(state) + ')'
-    if isinstance(state, JOPAString): return '\'' + str(state) + '\''
+        return '(' + shorten(prettyprintstate(state), 40) + ')'
+    if isinstance(state, JOPAString): return '\'' + shorten(state, 40) + '\''
+    if isinstance(state, CollectArgs):
+        return str(state) + ' ' + ' '.join([
+                shorten(argname, 10) + '=(' + shorten(val, 16) + ')'
+                for argname, val in state.args.items()])
     if not state: return '...'
     m = ugly_objectdesc.match(str(state))
     if m: return m.group(1)

@@ -113,8 +113,8 @@ class JOPABrace(JOPAObject):
             if not c: raise Exception('Premature end of source')
             if c == '(':
                 new = JOPABrace(self.source, self)
-                self.exposed_current_state = new
                 if eager: new._suckup()
+                self.exposed_current_state = new
                 return new
             elif c.isspace(): break;
             elif c == ')': break;
@@ -228,6 +228,35 @@ class JOPAEvalNthLiteral(JOPAObject):
             return self.answer
         return JOPAEvalNthLiteral(self.n, self.all, self.i + 1, self.answer)
 
+class CollectArgs(JOPAObject):
+    """
+    Takes a function and creates a thing that consumes multiple args,
+    once it collects them, the function gets called.
+    Example: (cls=JOPAFunction, lst=(('argname', True), ('function', True))
+    Consumes a literal, calls it 'argname', then a literal 'function',
+    then instantiates JOPAFunction with argname and function
+    """
+    def __init__(self, fun, lst, func_name=None, args=None,
+                 last_takes_literal=False):
+        JOPAObject.__init__(self, takes_literal=(
+                lst[0][1] if lst else last_takes_literal))
+        self.fun, self.lst = fun, lst
+        self.args = args or {}
+        self.func_name = func_name or 'arguments collector'
+    def __call__(self, arg, brace):
+        if not self.lst: return self.fun(arg, brace, **self.args)
+        argname, literal = self.lst[0]
+        lst = self.lst[1:]
+        args = self.args
+        args[argname] = arg
+        return CollectArgs(self.fun, lst, self.func_name, args)
+    def __str__(self): return self.func_name
+
+def JOPAFunctionOf_(arg, brace, function=None, argname=None):
+        function.context[str(argname)] = arg
+        return function.eval()
+JOPAFunctionOf = CollectArgs(JOPAFunctionOf_, \
+    ((('argname', True), ('function', True))), 'jopa.function.of')
 
 class JOPABoolean(JOPAObject): pass
 class JOPATrue(JOPABoolean):
@@ -261,6 +290,9 @@ jopa_ro = JOPAObjectPackage('jopa root package', {
         'ident': JOPAIdent(),
         'ternary': JOPATernary(),
         'uncallable': JOPAUncallable(),
+    }),
+    'function': JOPAObjectPackage('jopa.function package', {
+        'of': JOPAFunctionOf,
     }),
     'context': JOPAObjectPackage('jopa.context package', {
         'get': JOPAContextGet(),
