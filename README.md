@@ -60,17 +60,22 @@ language was devised and named JOPA: Joys Of Partial Application.
 It is smaller syntactically and it can be parsed without LEPL.
 Heck, I even think about reimplementing it in C.
 
-JOPA syntax rules:
-1) Braces
-2) Whitespace
+JOPA has two syntax rules, braces and whitespace
 
 A brace (f a b c) means:
+
 	Take a function f
-	call it with value a,
-	call the result with the value b,
-	call the result with the value c,
-	stop and return
+
+	call it with a,
+
+	call the result with b,
+
+	call the result with c,
+
+	stop and return the result
+
 Empty braces () means None
+
 (f) means f
 
 Whitespace separates stuff inside braces
@@ -89,6 +94,8 @@ This is nicely demonstrated in a TRULY INTERACTIVE INTERPRETER demo.
 Execute ./interactive_jopa.py to play with it
 
 The transformations I want to see first:
+
+```
 { abc }				<=>	(jopa function block (abc))
 { x | x }			<=>	(jopa function of x x)
 'Hello!'			<=>	(jopa string literal (Hello!))
@@ -97,4 +104,4 @@ The transformations I want to see first:
 xslang.context.set('a')(b)	<=>	(jopa context set a b)
 a;b				<=>	(jopa operator last a b) ???
 a.b				<=>	(a b) ???
-
+```
