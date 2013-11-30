@@ -211,17 +211,17 @@ class JOPASyntaxEnable(JOPAObject):
         print (brace.source)
         return JOPAIdent()
 
-@named('jopa.operators.ident')
+@named('jopa.operator.ident')
 class JOPAIdent(JOPAObject):
     def __call__(self, arg, brace):
         return arg
 
-@named('jopa.operators.ignore')
+@named('jopa.operator.ignore')
 class JOPAIgnore(JOPAObject):
     def __call__(self, arg, brace):
         return self
 
-@named('jopa.operators.ternary')
+@named('jopa.operator.ternary')
 class JOPATernary(JOPAObject):
     def __call__(self, arg, brace):
         if not isinstance(arg, JOPABoolean):
