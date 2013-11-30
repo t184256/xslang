@@ -15,7 +15,7 @@ The programmer would be free to specify which transformations apply to which par
 So, for example, whitespace-matters-haters could use libraries written by curly-braces-haters
 without forcing a single syntax on everyone.
 
-That's how I see it:
+That's how I see it at some point in the future:
 
 ```
 xslang.syntax.enable('hash-comments');
@@ -32,9 +32,6 @@ xslang.syntax.enable('hash-comments');
   return { x | x.str ? x.str : 'not specified' }
 }
 ```
-
-Currently the project provides an interpreter of a tiny toy language.
-The interpreter is written in Python and uses a nice library named LEPL.
 
 The phases of the project:
 
@@ -54,10 +51,50 @@ and stacked.
 
 PROFIT) Creating a language that could be used with any syntax imaginable!
 
-I totally understand the language will never get popular;
-I actually plan to obtain fun from devising transformations like this and seeing them working:
+JOPA
+====
 
-```
-a = b <=> xslang.context.update('a', b)
-[a, b, c] = {l = xslang.stdlib.list(); l.add(a); l.add(b); l.add(c); l}
-```
+The project used to provide an interpreter in LEPL, but since then a new core
+language was devised and named JOPA: Joys Of Partial Application.
+
+It is smaller syntactically and it can be parsed without LEPL.
+Heck, I even think about reimplementing it in C.
+
+JOPA syntax rules:
+1) Braces
+2) Whitespace
+
+A brace (f a b c) means:
+	Take a function f
+	call it with value a,
+	call the result with the value b,
+	call the result with the value c,
+	stop and return
+Empty braces () means None
+(f) means f
+
+Whitespace separates stuff inside braces
+
+There is no special syntax for 'do not evaluate' like the Lisp's quote.
+
+!) IMPORTANT A function does not get its parameter preevaluated.
+What it gets is either an identifier (a string) or a brace (a code block)
+The function predeclared whether it obtains a preevaluated brace or a literal
+
+For examples of JOPA code refer to test_jopa.py
+
+My JOPA interpreter offers REALLY EAGER EVALUATION
+and tries to calculate something after each new succesfully obtained byte.
+This is nicely demonstrated in a TRULY INTERACTIVE INTERPRETER demo.
+Execute ./interactive_jopa.py to play with it
+
+The transformations I want to see first:
+{ abc }				<=>	(jopa function block (abc))
+{ x | x }			<=>	(jopa function of x x)
+'Hello!'			<=>	(jopa string literal (Hello!))
+{ x | x }()			<=>	(jopa function of x x ())
+{ x | x }('a')			<=>	(jopa function of x x ('a'))
+xslang.context.set('a')(b)	<=>	(jopa context set a b)
+a;b				<=>	(jopa operator last a b) ???
+a.b				<=>	(a b) ???
+
