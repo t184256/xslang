@@ -16,6 +16,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
+import types
+
 class JOPAObject(object):
     def __init__(self, takes_literal=False):
         self.takes_literal = takes_literal
@@ -148,6 +150,20 @@ class JOPABrace(JOPAObject):
 
     def __str__(self): return self.string
 
+### Utility decorators for defining python functions
+
+def named(n):
+    def name(func):
+        func.__str__ = types.MethodType(
+                (lambda self: n), func, func.__class__
+        )
+        return func
+    return name
+
+def takes_literal(func):
+    func.takes_literal = True
+    return func
+
 ### Standard library ###
 
 class JOPAObjectNone(JOPAObject): pass
@@ -176,12 +192,7 @@ class JOPAContextGet(JOPAObject):
             raise Exception('jopa.context.get requires a string')
         return brace[str(arg)]
 
-class JOPAContextSetCreator(JOPAObject):
-    def __init__(self):
-        JOPAObject.__init__(self, takes_literal=True)
-    def __call__(self, arg, brace):
-        return JOPAContextSet(str(arg))
-
+JOPAContextSetCreator = takes_literal(lambda a, b: JOPAContextSet(str(a)))
 class JOPAContextSet(JOPAObject):
     def __init__(self, name):
         JOPAObject.__init__(self)
@@ -198,10 +209,12 @@ class JOPASyntaxEnable(JOPAObject):
         print (brace.source)
         return JOPAIdent()
 
+@named('jopa.operators.ident')
 class JOPAIdent(JOPAObject):
     def __call__(self, arg, brace):
         return arg
 
+@named('jopa.operators.ignore')
 class JOPAIgnore(JOPAObject):
     def __call__(self, arg, brace):
         return self
@@ -252,6 +265,12 @@ class CollectArgs(JOPAObject):
         return CollectArgs(self.fun, lst, self.func_name, args)
     def __str__(self): return self.func_name
 
+#def takes_additional_arg(argname, literal=False):
+#    return lambda func: CollectArgs(func, ((argname, literal),))
+#rewrite simpler, W/o CollectArgs
+
+#@takes_additional_arg('argname', True)
+#@takes_additional_arg('function', True)
 def JOPAFunctionOf_(arg, brace, function=None, argname=None):
         function.context[str(argname)] = arg
         return function.eval()
@@ -288,6 +307,7 @@ class JOPAUncallable(JOPAObject):
 jopa_ro = JOPAObjectPackage('jopa root package', {
     'operator': JOPAObjectPackage('jopa.operator package', {
         'ident': JOPAIdent(),
+        'ignore': JOPAIgnore(),
         'ternary': JOPATernary(),
         'uncallable': JOPAUncallable(),
     }),
@@ -296,7 +316,7 @@ jopa_ro = JOPAObjectPackage('jopa root package', {
     }),
     'context': JOPAObjectPackage('jopa.context package', {
         'get': JOPAContextGet(),
-        'set': JOPAContextSetCreator(),
+        'set': JOPAContextSetCreator,
     }),
     'bool': JOPAObjectPackage('jopa.bool package', {
         'true': JOPATrue(),
