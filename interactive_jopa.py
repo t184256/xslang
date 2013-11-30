@@ -117,7 +117,12 @@ def main():
             choices = i.b.context.keys()
             if isinstance(i.b.exposed_current_state, JOPAObjectPackage):
                 choices = i.b.exposed_current_state.dic.keys() + choices
-            print ' '.join(choices)
+            prefix = s.split()[-1].split('(')[-1].split(')')[-1]
+            filtered = [c for c in choices if c.startswith(prefix)]
+            if len(filtered) == 1:
+                s += filtered[0][len(prefix):] + ' '
+            else:
+                print ' '.join(choices)
         except EnterException, e: s = INITIAL_S
         except Exception, e:
             print 'E', type(e), e.message
