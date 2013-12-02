@@ -97,13 +97,13 @@ class JOPABrace(JOPAObject):
             if f in self: f = self[f]
             else:
                 raise JOPAException("Uncallable '%s' begins the brace" % f)
-        if isinstance(f, JOPABrace): f = f.eval()
-        self.exposed_current_state = f
         while True:
+            if isinstance(f, str): f = JOPABrace(f, self)
+            if isinstance(f, JOPABrace): f = f.eval()
+            self.exposed_current_state = f
             a = self.read_one(eager=(not f.takes_literal))
             if a is None: break
             f = self.apply(f, a)
-            self.exposed_current_state = f
         return f
 
     def read_one(self, eager=True):
