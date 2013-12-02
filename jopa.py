@@ -82,56 +82,6 @@ jopa_ro = JOPAObjectPackage('jopa root package', {
 
 class JOPAException(Exception): pass
 
-SQMAP = {'[':'(', ']':')'}
-def translate(source, func):
-    c = source(); return func(c) if not c is None else None
-def translate_remap(src, MAP):
-    return translate(src, lambda c: MAP[c] if c in MAP else c)
-
-def consume_until(source, char, exception=None):
-    s = ''
-    while True:
-        c = source()
-        if c is None:
-            if exception is not None: raise exception
-            break
-        if c == char: break
-        s += c
-    return s
-def curly_braced_functions(source):
-    while True:
-        c = None
-        while True:
-            c = source()
-            if c == '{': break
-            yield c
-        first = consume_until(source, '|', JOPAException('No | inside {|}'))
-        first = '(jopa function of %s (' % first
-        while first:
-            yield first[0]
-            first = first[1:]
-        while True:
-            c = source()
-            if c is None: raise JOPAException('No }')
-            if c == '}': break
-            yield c
-        yield ')'; yield ')'
-
-def generator_to_callable(generator, *a, **kwa):
-    gen = generator(*a, **kwa)
-    def call():
-        try:
-            return gen.next()
-        except StopIteration, e:
-            return None
-    return call
-
-TRANSFORMATIONS = {
-    'square_brackets': lambda src: lambda: translate_remap(src, SQMAP),
-    'curly_braced_functions': lambda src:
-    generator_to_callable(curly_braced_functions, src)
-}
-
 class UnpeekableStringSource(object):
     def __init__(self, string):
         self.string = string
@@ -370,7 +320,58 @@ def JOPAUncallable(arg, brace):
 def JOPAStringSurround(arg, brace, surr=None):
     return JOPAString(str(surr) + str(arg) + str(surr))
 
+### Syntax transformations ###
 
-def main(): print JOPABrace(raw_input, rootobj=jopa_ro).eval()
-if __name__ == '__main__': main()
+SQMAP = {'[':'(', ']':')'}
+def translate(source, func):
+    c = source(); return func(c) if not c is None else None
+def translate_remap(src, MAP):
+    return translate(src, lambda c: MAP[c] if c in MAP else c)
+
+def consume_until(source, char, exception=None):
+    s = ''
+    while True:
+        c = source()
+        if c is None:
+            if exception is not None: raise exception
+            break
+        if c == char: break
+        s += c
+    return s
+def curly_braced_functions(source):
+    while True:
+        c = None
+        while True:
+            c = source()
+            if c == '{': break
+            yield c
+        first = consume_until(source, '|', JOPAException('No | inside {|}'))
+        first = '(jopa function of %s (' % first
+        while first:
+            yield first[0]
+            first = first[1:]
+        while True:
+            c = source()
+            if c is None: raise JOPAException('No }')
+            if c == '}': break
+            yield c
+        yield ')'; yield ')'
+
+def generator_to_callable(generator, *a, **kwa):
+    gen = generator(*a, **kwa)
+    def call():
+        try:
+            return gen.next()
+        except StopIteration, e:
+            return None
+    return call
+
+TRANSFORMATIONS = {
+    'square_brackets': lambda src: lambda: translate_remap(src, SQMAP),
+    'curly_braced_functions': lambda src:
+    generator_to_callable(curly_braced_functions, src)
+}
+
+###
+if __name__ == '__main__': print JOPABrace(raw_input(), rootobj=jopa_ro).eval()
 
