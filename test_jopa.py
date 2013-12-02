@@ -72,7 +72,8 @@ TESTS = (
           )
          )
         cc (jopa string create 1) (jopa string create 2))""","a1b2c"),
-#    ("(jopa syntax enable square_brackets [jopa])",          ""),
+    ("(jopa syntax enable square_brackets jopa string literal [hi])", "hi"),
+    ("((jopa syntax enable square_brackets) jopa string literal [hi]))","[hi]"),
 )
 
 if __name__ == '__main__':

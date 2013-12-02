@@ -53,7 +53,6 @@ class JOPASyntaxEnable(JOPAObject):
         JOPAObject.__init__(self, takes_literal=True)
     def __call__(self, arg, brace):
         brace.source = TRANSFORMATIONS[str(arg)](brace.source)
-        print (brace.source)
         return JOPAIdent
     def __str__(self): return 'jopa.syntax.enable'
 
@@ -89,7 +88,7 @@ class TranslateMapSource(object):
     def peek(self): return self.translate(self.subsource.peek())
     def __call__(self): return self.translate(self.subsource())
 
-SQMAP = {'(':'[', ')':']', '[':')', ']':')'}
+SQMAP = {'[':'(', ']':')'}
 TranslateSquareBrackets = lambda ss: TranslateMapSource(ss,
         lambda c: SQMAP[c] if c in SQMAP else c
 )
