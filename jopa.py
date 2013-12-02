@@ -84,12 +84,10 @@ jopa_ro = JOPAObjectPackage('jopa root package', {
 class JOPAException(Exception): pass
 
 class UnpeekableStringSource(object):
-    def __init__(self, string):
-        self.string = string
+    def __init__(self, string): self.string = string
     def __call__(self):
         if not self.string: return None
-        c = self.string[0]
-        self.string = self.string[1:]
+        c, self.string = self.string[0], self.string[1:]
         return c
 
 class Source(object):
@@ -97,28 +95,17 @@ class Source(object):
         self.subsource = subsource
         if isinstance(subsource, str):
             self.subsource = UnpeekableStringSource(subsource)
-        if subsource is None:
-            self.s = ''
-        else:
-            self.s = self.subsource()
+        if subsource is None: self.s = ''
+        else: self.s = self.subsource()
     def peek(self): return self.s[0] if self.s else None
     def __call__(self):
-        if len(self.s) > 1:
-            c = self.s[0]
-            self.s = self.s[1:]
-            return c
-        elif len(self.s) == 1:
-            c = self.s
-            if self.subsource is None: self.s = ''; return c
-            n = self.subsource()
-            if not n is None:
-                self.s = n
-            else:
-                self.func = None
-                self.s = ''
-            return c
-        else:
-            return None
+        if len(self.s) != 1: return None
+        c = self.s
+        if self.subsource is None: self.s = ''; return c
+        n = self.subsource()
+        if not n is None: self.s = n
+        else: self.subsource, self.s = None, ''
+        return c
     def wrap_subsource(self, wrapper):
         self.subsource = wrapper(self.subsource)
 
