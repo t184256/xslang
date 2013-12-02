@@ -22,12 +22,10 @@ class JOPAObject(object):
     def __init__(self, takes_literal=False):
         self.takes_literal = takes_literal
 
-class JOPAObjectNone(JOPAObject): pass
+class JOPAObjectNone(JOPAObject): def __str__(self): return 'none'
 class JOPABoolean(JOPAObject): pass
-class JOPATrue(JOPABoolean):
-    def __str__(self): return 'true'
-class JOPAFalse(JOPABoolean):
-    def __str__(self): return 'false'
+class JOPATrue(JOPABoolean): def __str__(self): return 'true'
+class JOPAFalse(JOPABoolean): def __str__(self): return 'false'
 def JOPABool(obj): return JOPATrue() if obj else JOPAFalse()
 
 class JOPAObjectPackage(JOPAObject):
