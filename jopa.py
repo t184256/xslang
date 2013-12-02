@@ -176,7 +176,7 @@ class JOPABrace(JOPAObject):
         if isinstance(source, str): source = Source(source)
         self.source, self.parent = source, parent
         self.context = {}
-        if not rootobj is None: self.context['jopa'] = rootobj
+        self.context['jopa'] = jopa_ro if rootobj is None else rootobj
         self.string = None
         self.exposed_current_state = None
 

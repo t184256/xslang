@@ -16,15 +16,15 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-from jopa import JOPABrace, JOPAString, JOPAObjectPackage
+from jopa import JOPABrace, JOPAString, JOPAObjectPackage, Source
 from jopa import JOPAException
-from jopa import jopa_ro
 
 import sys, time, re, traceback
 
 ugly_objectdesc = re.compile(r'<(\S*) object at .*>')
 
 class BackspaceException(Exception): pass
+class ControlWException(Exception): pass
 class EnterException(Exception): pass
 class TabException(Exception): pass
 
@@ -45,61 +45,50 @@ except ImportError:
 # TODO rewrite for the new Source
 class Interactive(object):
     def __init__(self, initial_string=None):
-        self.s = initial_string or '('
-        self.b = JOPABrace(self, rootobj=jopa_ro)
+        self.s = initial_string
         self.h = ''
         self.interpreter_got_recreated = True # alters the prompt to !
         self.subsource = getch
-
-    def prompt(self): return '! ' if self.interpreter_got_recreated else '> '
+        self.b = JOPABrace(Source(subsource=self))
 
     def main(self):
         self.b.eval()
 
-    def peek(self):
-        return self.s[0]
+    def prompt(self): return '! ' if self.interpreter_got_recreated else '> '
 
     def __call__(self):
-        if len(self.s) > 1:
-            c = self.s[0]
-            self.s = self.s[1:]
-            self.h += c
+        if self.s:
+            self.h, c, self.s = self.h + self.s[0], self.s[0], self.s[1:]
             return c
+        state = prettyprintstate(self.b, shorten_to=30)
+        l = 80 - (len(self.prompt()) + len(self.h) + len(state) + 1)
+        if l > 0:
+            print self.prompt() + self.h + '#' + ' ' * l + state
         else:
-            wrote = self.h + self.s
-            state = prettyprintstate(self.b)
-            l = 80 - (len(self.prompt()) + len(wrote) + len(state))
-            if l > 0:
-                print self.prompt() + wrote + ' ' * l + state
-            else:
-                print; print state
-                print; print self.prompt() + wrote
-                print; print
-            self.interpreter_got_recreated = False
-            c = self.subsource()
-            if ord(c) == 9: raise TabException()
-            if ord(c) == 13: raise EnterException()
-            if ord(c) == 27: sys.exit(0)
-            if ord(c) == 127: raise BackspaceException()
-            out = self.s
-            self.h += out
-            self.s = c
-#           print "$ '%s' | '%s'" % (self.h, self.s)
-            return out
-
-    def wrap_subsource(self, wrapper):
-        self.subsource = wrapper(self.subsource)
+            state = prettyprintstate(self.b, shorten_to=78)
+            print '->' + state
+            print self.prompt() + self.h + '#'
+        self.interpreter_got_recreated = False
+        c = self.subsource()
+        if ord(c) == 9: raise TabException()
+        if ord(c) == 23: raise ControlWException()
+        if ord(c) == 13: raise EnterException()
+        if ord(c) == 27: sys.exit(0)
+        if ord(c) == 127: raise BackspaceException()
+        self.h += c
+        return c
 
 def shorten(s, maxlen):
     s = str(s)
     if len(s) <= maxlen: return s
     return s[:maxlen - 3] + '..' + s[-1]
 
-def prettyprintstate(b):
+def prettyprintstate(b, shorten_to=78):
     state = b.exposed_current_state
     if isinstance(state, JOPABrace):
-        return '(' + shorten(prettyprintstate(state), 40) + ')'
-    if isinstance(state, JOPAString): return '\'' + shorten(state, 40) + '\''
+        return '(' + shorten(prettyprintstate(state), shorten_to) + ')'
+    if isinstance(state, JOPAString):
+        return '\'' + shorten(state, shorten_to) + '\''
     if not state: return '...'
     m = ugly_objectdesc.match(str(state))
     if m: return m.group(1)
@@ -113,9 +102,10 @@ def main():
         try:
             i = Interactive(s)
             i.main()
-        except BackspaceException, e: s = i.h
+        except BackspaceException, e: s = i.h[:-1]
+        except ControlWException, e: s = i.h.rstrip().rsplit(' ', 1)[0] + ' '
         except TabException, e:
-            s = i.h + i.s
+            s = i.h
             choices = i.b.context.keys()
             if isinstance(i.b.exposed_current_state, JOPAObjectPackage):
                 choices = i.b.exposed_current_state.dic.keys() + choices
@@ -124,14 +114,14 @@ def main():
             if len(filtered) == 1:
                 s += filtered[0][len(prefix):] + ' '
             else:
-                print ' '.join(choices)
+                print ': ' + ' '.join(choices)
         except EnterException, e: s = INITIAL_S
         except JOPAException, e:
             print 'E', e
-            s = i.h
+            s = i.h[:-1]
         except Exception, e:
             print 'E', traceback.format_exc(e)
-            s = i.h
+            s = i.h[:-1]
 
 if __name__ == '__main__': main()
 

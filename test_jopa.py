@@ -16,7 +16,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-from jopa import JOPABrace, jopa_ro
+from jopa import JOPABrace
 import traceback
 
 TESTS = (
@@ -82,7 +82,7 @@ TESTS = (
 if __name__ == '__main__':
     for c, r in TESTS:
         try:
-            e = JOPABrace(c, rootobj=jopa_ro).eval()
+            e = JOPABrace(c).eval()
         except Exception, e:
             print 'WHILE EVALUATING "%s"' % c
             print traceback.format_exc(e)
