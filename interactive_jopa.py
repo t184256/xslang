@@ -42,12 +42,14 @@ except ImportError:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
         return ch
 
+# TODO rewrite for the new Source
 class Interactive(object):
     def __init__(self, initial_string=None):
         self.s = initial_string or '('
         self.b = JOPABrace(self, rootobj=jopa_ro)
         self.h = ''
         self.interpreter_got_recreated = True # alters the prompt to !
+        self.subsource = getch
 
     def prompt(self): return '! ' if self.interpreter_got_recreated else '> '
 
@@ -74,7 +76,7 @@ class Interactive(object):
                 print; print self.prompt() + wrote
                 print; print
             self.interpreter_got_recreated = False
-            c = getch()
+            c = self.subsource()
             if ord(c) == 9: raise TabException()
             if ord(c) == 13: raise EnterException()
             if ord(c) == 27: sys.exit(0)
@@ -84,6 +86,9 @@ class Interactive(object):
             self.s = c
 #           print "$ '%s' | '%s'" % (self.h, self.s)
             return out
+
+    def wrap_subsource(self, wrapper):
+        self.subsource = wrapper(self.subsource)
 
 def shorten(s, maxlen):
     s = str(s)
@@ -103,7 +108,7 @@ def prettyprintstate(b):
 INITIAL_S = '('
 
 def main():
-    s = INITIAL_S
+    s = INITIAL_S if len(sys.argv) < 2 else INITIAL_S + ' '.join(sys.argv[1:])
     while True:
         try:
             i = Interactive(s)

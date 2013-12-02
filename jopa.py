@@ -52,7 +52,7 @@ class JOPASyntaxEnable(JOPAObject):
     def __init__(self):
         JOPAObject.__init__(self, takes_literal=True)
     def __call__(self, arg, brace):
-        brace.source = TRANSFORMATIONS[str(arg)](brace.source)
+        brace.source.wrap_subsource(TRANSFORMATIONS[str(arg)])
         return JOPAIdent
     def __str__(self): return 'jopa.syntax.enable'
 
@@ -82,36 +82,98 @@ jopa_ro = JOPAObjectPackage('jopa root package', {
 
 class JOPAException(Exception): pass
 
-class TranslateMapSource(object):
-    def __init__(self, subsource, translate=None):
-        self.subsource, self.translate = subsource, translate
-    def peek(self): return self.translate(self.subsource.peek())
-    def __call__(self): return self.translate(self.subsource())
-
 SQMAP = {'[':'(', ']':')'}
-TranslateSquareBrackets = lambda ss: TranslateMapSource(ss,
-        lambda c: SQMAP[c] if c in SQMAP else c
-)
+def translate(source, func):
+    c = source(); return func(c) if not c is None else None
+def translate_remap(src, MAP):
+    return translate(src, lambda c: MAP[c] if c in MAP else c)
+
+def consume_until(source, char, exception=None):
+    s = ''
+    while True:
+        c = source()
+        if c is None:
+            if exception is not None: raise exception
+            break
+        if c == char: break
+        s += c
+    return s
+def curly_braced_functions(source):
+    while True:
+        c = None
+        while True:
+            c = source()
+            if c == '{': break
+            yield c
+        first = consume_until(source, '|', JOPAException('No | inside {|}'))
+        first = '(jopa function of %s (' % first
+        while first:
+            yield first[0]
+            first = first[1:]
+        while True:
+            c = source()
+            if c is None: raise JOPAException('No }')
+            if c == '}': break
+            yield c
+        yield ')'; yield ')'
+
+def generator_to_callable(generator, *a, **kwa):
+    gen = generator(*a, **kwa)
+    def call():
+        try:
+            return gen.next()
+        except StopIteration, e:
+            return None
+    return call
 
 TRANSFORMATIONS = {
-    'square_brackets': TranslateSquareBrackets
+    'square_brackets': lambda src: lambda: translate_remap(src, SQMAP),
+    'curly_braced_functions': lambda src:
+    generator_to_callable(curly_braced_functions, src)
 }
 
-class StringSource(object):
-    def __init__(self, code):
-        self._str = code
-    def peek(self):
-        if not self._str: return None
-        return self._str[0]
+class UnpeekableStringSource(object):
+    def __init__(self, string):
+        self.string = string
     def __call__(self):
-        if not self._str: return None
-        char = self._str[0]
-        self._str = self._str[1:]
-        return char
+        if not self.string: return None
+        c = self.string[0]
+        self.string = self.string[1:]
+        return c
+
+class Source(object):
+    def __init__(self, subsource=None):
+        self.subsource = subsource
+        if isinstance(subsource, str):
+            self.subsource = UnpeekableStringSource(subsource)
+        if subsource is None:
+            self.s = ''
+        else:
+            self.s = self.subsource()
+    def peek(self): return self.s[0] if self.s else None
+    def __call__(self):
+        if len(self.s) > 1:
+            c = self.s[0]
+            self.s = self.s[1:]
+            return c
+        elif len(self.s) == 1:
+            c = self.s
+            if self.subsource is None: self.s = ''; return c
+            n = self.subsource()
+            if not n is None:
+                self.s = n
+            else:
+                self.func = None
+                self.s = ''
+            return c
+        else:
+            return None
+    def wrap_subsource(self, wrapper):
+        self.subsource = wrapper(self.subsource)
 
 class JOPABrace(JOPAObject):
     def __init__(self, source, parent=None, rootobj=None):
-        if isinstance(source, str): source = StringSource(source)
+        if isinstance(source, str): source = Source(source)
         self.source, self.parent = source, parent
         self.context = {}
         if not rootobj is None: self.context['jopa'] = rootobj
@@ -143,7 +205,7 @@ class JOPABrace(JOPAObject):
     def eval(self):
         """ Eagerly evaluates with every single incoming byte """
         if not self.string is None:
-            self.source = StringSource('(' + self.string + ')')
+            self.source = Source('(' + self.string + ')')
             self.string = None
         if not self.source() == '(': raise JOPAException('No (')
         f = self.read_one()
