@@ -35,9 +35,12 @@ class JOPAObjectPackage(JOPAObject):
     def __init__(self, name, dic=None):
         JOPAObject.__init__(self)
         self.dic, self.name = dic or {}, name
-        self.bindable = []
+        self.bindable, self.bound = [], []
     def __call__(self, arg, brace):
-        if arg in self.dic: return self.dic[arg]
+        if arg in self.dic:
+            if arg in self.bound:
+                return self.dic[arg](self, brace) # Applying a bound method
+            return self.dic[arg]
         raise JOPAException('"%s" not found in "%s"' % (str(arg), str(self)))
     def __str__(self): return self.name
 
@@ -158,12 +161,14 @@ class JOPABrace(JOPAObject):
         if isinstance(f, JOPABrace): f = f.eval()
         self.exposed_current_state = f
         while True:
-            if isinstance(f, str): f = JOPABrace(f, self)
-            if isinstance(f, JOPABrace): f = f.eval()
-            self.exposed_current_state = f
+            if isinstance(f, str):
+                raise JOPAException(f + ' IS A STRING, not function!')
             a = self.read_one(eager=(not f.takes_literal))
             if a is None: break
+            if isinstance(f, str): f = JOPABrace(f, self)
+            if isinstance(f, JOPABrace): f = f.eval()
             f = self.apply(f, a)
+            self.exposed_current_state = f
         return f
 
     def read_one(self, eager=True):
@@ -323,20 +328,17 @@ def JOPAPackageMethod(arg, brace, package=None, name=None):
     return JOPAIdent
 
 @jopa_pyfunc('jopa.package.create', auto_add=True)
-@jopa_pyfunc_takes_additional_arg('pkgdesc', verificator=isstr)
-def JOPAPackageCreate(pkgname, brace, package=None, pkgdesc=None):
+def JOPAPackageCreate(pkgname, brace):
     isstr(pkgname)
-    return JOPAObjectPackage(str(pkgdesc))
+    return JOPAObjectPackage(str(pkgname))
 
 @jopa_pyfunc('jopa.package.instantiate', auto_add=True)
 def JOPAPackageInstantiate(pkg, brace, package=None, pkgdesc=None):
     ispkg(pkg)
     dic = pkg.dic.copy()
-    new_instance = JOPAObjectPackage('instance of ' + str(pkg), dic)
-    for k, v in new_instance.dic.items():
-        if k in pkg.bindable:
-            new_instance.dic[k] = v(new_instance, brace)
-    return new_instance
+    new_example_instance = JOPAObjectPackage('example_instance of ' + str(pkg), dic)
+    new_example_instance.bound = pkg.bindable
+    return new_example_instance
 
 ### Syntax transformations ###
 
@@ -368,6 +370,23 @@ def curly_braced_functions(source):
             yield c
         yield ')'; yield ')'
 
+def dumb_quotes(source):
+    while True:
+        c = None
+        while True:
+            c = source()
+            if c == '\'': break
+            yield c
+        first = '( jopa string literal ('
+        while first:
+            yield first[0]; first = first[1:]
+        while True:
+            c = source()
+            if c is None: raise JOPAException('No closing quote')
+            if c == '\'': break
+            yield c
+        yield ')'; yield ')'
+
 def generator_to_callable(generator, *a, **kwa):
     gen = generator(*a, **kwa)
     def call():
@@ -394,6 +413,7 @@ def transformation_composition(ti, *trs):
 sqbr = transformation_composition(translation('[', '('), translation(']', ')'))
 TRANSFORMATIONS = {
     'square_brackets': sqbr,
+    'dumb_quotes': lambda src: generator_to_callable(dumb_quotes, src),
     'curly_braced_functions': lambda src:
     generator_to_callable(curly_braced_functions, src),
     'dots_to_spaces': translation('.', ' '),
@@ -403,24 +423,23 @@ TRANSFORMATIONS = {
 
 jopa_stdlib = """(
 jopa syntax enable curly_braced_functions
-jopa package set (jopa string) (jopa string literal surround)
+jopa syntax enable dumb_quotes
+jopa package set (jopa string) 'surround'
     (jopa function of s (jopa function of c (jopa string create s c s)))
-jopa package set (jopa operator) (jopa string literal ignore)
-    { x | jopa operator ident }
-jopa package set (jopa) (jopa string literal (myobject))
-    (jopa package create
-        (jopa string literal myobject)
-        (jopa string literal (('my test object package')))
-    )
-jopa package set (jopa myobject) (jopa string literal value)
-    (jopa string literal MY)
-jopa package method (jopa myobject) (jopa string literal whose)
-    {x | x value}
-jopa package set (jopa) (jopa string literal instance)
-    (jopa package instantiate (jopa myobject))
-jopa package set (jopa instance) (jopa string literal value)
-    (jopa string literal HEH)
+jopa package set (jopa operator) 'ignore' { x | jopa operator ident }
+jopa package set (jopa) 'example_prototype'
+    (jopa package create 'my test object package')
+jopa package set (jopa example_prototype) 'value' 'PROTOVALUE'
+jopa package method (jopa example_prototype) 'whose' {x | x value}
+jopa package method (jopa example_prototype) 'set_value'
+    {o | jopa package set o 'value' 'OVERRIDEN'}
+jopa package set (jopa) 'example_instance'
+    (jopa package instantiate (jopa example_prototype))
+jopa package set (jopa example_instance) 'value' 'UNUSED'
+jopa example_instance set_value
 )"""
+#jopa example_instance set_value 'OVERRIDEN'
+#jopa package method (jopa example_prototype) 'new' (jopa package instantiate)
 
 JOPABrace(jopa_stdlib).eval() # Complete the jopa_ro opject with jopa code
 

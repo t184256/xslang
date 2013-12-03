@@ -79,6 +79,11 @@ TESTS = (
         )""", "hellocurly"),
     ("((jopa string surround (jopa string literal xs) (jopa string create y)))",
      "xsyxs"),
+    ("(jopa example_prototype value)",                         "PROTOVALUE"),
+    ("(jopa example_prototype whose (jopa example_prototype))","PROTOVALUE"),
+    ("(jopa example_instance value)",                          "OVERRIDEN"),
+    ("(jopa example_instance whose)",                          "OVERRIDEN"),
+    ("(jopa example_prototype whose (jopa example_instance))", "OVERRIDEN"),
 )
 
 if __name__ == '__main__':
