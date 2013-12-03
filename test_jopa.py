@@ -77,6 +77,8 @@ TESTS = (
     ("""(jopa syntax enable curly_braced_functions
          {x|jopa string create hello x} (jopa string create curly)
         )""", "hellocurly"),
+    ("((jopa string surround (jopa string literal xs) (jopa string create y)))",
+     "xsyxs"),
 )
 
 if __name__ == '__main__':

@@ -206,6 +206,15 @@ class JOPABrace(JOPAObject):
 
 ### Utility decorators for defining python functions
 
+def jopa_ro_add(name, func):
+    "Automatically add objects into packages inside jopa_ro"
+    assert name.startswith('jopa.'); name = name.split('.', 1)[1]
+    pkg = jopa_ro
+    while '.' in name:
+        prefix, name = name.split('.', 1)
+        pkg = pkg.dic[prefix]
+    pkg.dic[name] = func
+
 def jopa_pyfunc(fname, takes_literal=False, auto_add=False):
     def transform(f_outer):
         f = f_outer
@@ -213,14 +222,7 @@ def jopa_pyfunc(fname, takes_literal=False, auto_add=False):
             f = f._inner_func
         f.takes_literal = takes_literal
         f.__str__ = types.MethodType((lambda s: fname), f, f.__class__)
-        if auto_add: # automatically add it into packages inside jopa_ro
-            name = fname
-            assert name.startswith('jopa.'); name = name.split('.', 1)[1]
-            pkg = jopa_ro
-            while '.' in name:
-                prefix, name = name.split('.', 1)
-                pkg = pkg.dic[prefix]
-            pkg.dic[name] = f_outer
+        if auto_add: jopa_ro_add(fname, f_outer)
         return f_outer
     return transform
 
@@ -258,10 +260,10 @@ def JOPAContextSet(arg, brace, valname=None):
     return JOPAIdent
 
 @jopa_pyfunc('jopa.operator.ident', auto_add=True)
-def JOPAIdent(arg, brace): return arg
+def JOPAIdent(arg, brace): return arg # Could be: '(jopa function of x (x))'
 
-@jopa_pyfunc('jopa.operator.ignore', auto_add=True)
-def JOPAIgnore(arg, brace): return JOPAIdent
+jopa_ro_add('jopa.operator.ignore', \
+            '(jopa function of x (jopa operator ident))')
 
 @jopa_pyfunc('jopa.operator.ternary', auto_add=True)
 def JOPATernary(arg, brace):
@@ -303,10 +305,8 @@ def JOPAStringEqual(string2, brace, string1):
 def JOPAUncallable(arg, brace):
     raise JOPAException('uncallable was called with "%s"' % str(arg))
 
-@jopa_pyfunc('jopa.string.surround', auto_add=True)
-@jopa_pyfunc_takes_additional_arg('surr', verificator=isstring)
-def JOPAStringSurround(arg, brace, surr=None):
-    return JOPAString(str(surr) + str(arg) + str(surr))
+jopa_ro_add('jopa.string.surround',
+    '(jopa function of s (jopa function of c (jopa string create s c s)))')
 
 ### Syntax transformations ###
 
