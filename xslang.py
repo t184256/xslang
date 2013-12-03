@@ -46,10 +46,13 @@ def stream_str(string):
 
 def stream_read_until_closing_brace(stream, opened=1):
     s, b = '', opened
-    while b > 0 and not s.isspace():
+    while b > 0 or not ('(' in s or ')' in s):
         c = stream.next(); s += c
         if c == '(': b += 1
         elif c == ')': b -= 1
+        if c.isspace() or c in '()':
+            if b == 0:
+                return s[:-1]
     return s[:-1]
 
 def stream_read_word_or_brace(stream):
@@ -83,26 +86,23 @@ class XInterpreter(object):
     def eval(self):
         if not self.no_first_brace:
            if self.stream.next() != '(': raise XException('No (')
-        token_stream = stream_read_word_or_brace(self.stream)
+        self.token_stream = stream_read_word_or_brace(self.stream)
         f = None
         while True:
-            n = token_stream.next()
-            print self, n
+            n = self.token_stream.next()
             if n.isspace() or n == '': continue
             elif n == '(':
                 n = XInterpreter(self.stream, no_first_brace=True, parent=self)
                 n = n.eval()
-            elif n == ')':
-                return f
-            if (isinstance(n, str)):
-                if n in self: n = self[n]
-            print 'here comes', n
-            if f is None:
-                if 'init' in dir(f):
-                    f = f.init(arg=None, interpreter=self); continue
-            else: f = f(arg=None, interpreter=self)
-            #else: f = f(n, interpreter=self)
-
+            elif n == ')': return f
+            if (isinstance(n, str)): if n in self: n = self[n]
+            if f is None: f = n
+            else: f = f(n, interpreter=self)
+            while 'init' in dir(f):
+                print 'before init', f
+                f = f.init(interpreter=self)
+                print 'after init', f
+            
     def apply(f, n):
         return f(n, self)
 
@@ -113,24 +113,35 @@ class XLiteral(XObject):
         self.s = stream_read_until_closing_brace(interpreter.source, 0)
         return self.s
     def __call__(arg, interpreter):
-        raise XException('Literals are not callable')
+        raise XException('Attempted to call a literal ' + self.s)
+
+def steal_literal(interpreter):
+    s = ''
+    while not s or s.isspace(): s = interpreter.token_stream.next()
+    if s == '(': return stream_read_until_closing_brace(interpreter.stream)
+    return s
+
+class XString(XObject)
+    def init(self, interpreter):
+        return self[steal_literal(interpreter).strip()]
+    def __call__(self, arg, interpreter):
+        return self[arg]
 
 class XDictionaryObject(XObject, dict):
-    def init(self, arg, interpreter):
-        print 'INIT'
-        self.s = stream_read_until_closing_brace(interpreter.source, 0)
-        print 'SUCKED', self.s
-        return self.s
-    def __call__(self, arg, interpreter): return self[arg]
+    def init(self, interpreter):
+        return self[steal_literal(interpreter).strip()]
+    def __call__(self, arg, interpreter):
+        return self[arg]
 
 xslang_rootobj = XDictionaryObject({
-    'ident': Xident,
-    'ignore': Xignore,
+    'operators': XDictionaryObject({
+        'ident': Xident,
+        'ignore': Xignore,
+    }),
 })
 
 def main():
-    xi = XInterpreter('(xslang ident)', xslang_rootobj)
-    print xi.context
-    print xi.eval()
+    print XInterpreter('(xslang operators ident)', xslang_rootobj).eval()
+    print XInterpreter('(xslang (operators) ident)', xslang_rootobj).eval()
 
 if __name__ == '__main__': main()
