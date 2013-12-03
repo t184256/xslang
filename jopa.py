@@ -310,12 +310,6 @@ jopa_ro_add('jopa.string.surround',
 
 ### Syntax transformations ###
 
-SQMAP = {'[':'(', ']':')'}
-def translate(source, func):
-    c = source(); return func(c) if not c is None else None
-def translate_remap(src, MAP):
-    return translate(src, lambda c: MAP[c] if c in MAP else c)
-
 def consume_until(source, char, exception=None):
     s = ''
     while True:
@@ -336,8 +330,7 @@ def curly_braced_functions(source):
         first = consume_until(source, '|', JOPAException('No | inside {|}'))
         first = '(jopa function of %s (' % first
         while first:
-            yield first[0]
-            first = first[1:]
+            yield first[0]; first = first[1:]
         while True:
             c = source()
             if c is None: raise JOPAException('No }')
@@ -354,10 +347,26 @@ def generator_to_callable(generator, *a, **kwa):
             return None
     return call
 
+def translation(frm, to): # translation('.', ' ')(src)() yields translated data
+    def translate(src):
+        def next():
+            c = src(); return c if c != frm else to
+        return next
+    return translate
+
+def transformation_composition(ti, *trs):
+    def compose(src):
+        t = ti(src)
+        for t_ in trs: t = t_(t)
+        return t
+    return compose
+
+sqbr = transformation_composition(translation('[', '('), translation(']', ')'))
 TRANSFORMATIONS = {
-    'square_brackets': lambda src: lambda: translate_remap(src, SQMAP),
+    'square_brackets': sqbr,
     'curly_braced_functions': lambda src:
-    generator_to_callable(curly_braced_functions, src)
+    generator_to_callable(curly_braced_functions, src),
+    'dots_to_spaces': translation('.', ' '),
 }
 
 ###
