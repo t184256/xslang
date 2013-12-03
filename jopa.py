@@ -206,7 +206,7 @@ class JOPABrace(JOPAObject):
 
 ### Utility decorators for defining python functions
 
-def jopa_function(fname, takes_literal=False, auto_add=False):
+def jopa_pyfunc(fname, takes_literal=False, auto_add=False):
     def transform(f_outer):
         f = f_outer
         while '_inner_func' in f.__dict__:
@@ -224,14 +224,14 @@ def jopa_function(fname, takes_literal=False, auto_add=False):
         return f_outer
     return transform
 
-def takes_additional_arg(argname, literal=False, verificator=None):
+def jopa_pyfunc_takes_additional_arg(argname, literal=False, verificator=None):
     def transform(func):
-        @jopa_function(str(func), takes_literal=literal)
+        @jopa_pyfunc(str(func), takes_literal=literal)
         def PartiallyApplied(addn_arg, brace, **more_args):
             if verificator is not None:
                 r = verificator(addn_arg)
                 if not r == True: raise JOPAException(r)
-            @jopa_function(str(func), takes_literal=func.takes_literal)
+            @jopa_pyfunc(str(func), takes_literal=func.takes_literal)
             def ProxyFunc(arg, brace, *args, **kwargs):
                 kwargs[argname] = addn_arg
                 kwargs.update(more_args)
@@ -245,25 +245,25 @@ isstring = lambda s: isinstance (s, JOPAString) or 'argument is not a string'
 
 ### Standard library ###
 
-@jopa_function('jopa.context.get', auto_add=True)
+@jopa_pyfunc('jopa.context.get', auto_add=True)
 def JOPAContextGet(arg, brace):
     if not isinstance(arg, JOPAString):
         raise JOPAException('jopa.context.get requires a string')
     return brace[str(arg)]
 
-@jopa_function('jopa.context.set', auto_add=True)
-@takes_additional_arg('valname', literal=True)
+@jopa_pyfunc('jopa.context.set', auto_add=True)
+@jopa_pyfunc_takes_additional_arg('valname', literal=True)
 def JOPAContextSet(arg, brace, valname=None):
     brace.context[str(valname)] = arg
     return JOPAIdent
 
-@jopa_function('jopa.operator.ident', auto_add=True)
+@jopa_pyfunc('jopa.operator.ident', auto_add=True)
 def JOPAIdent(arg, brace): return arg
 
-@jopa_function('jopa.operator.ignore', auto_add=True)
+@jopa_pyfunc('jopa.operator.ignore', auto_add=True)
 def JOPAIgnore(arg, brace): return JOPAIdent
 
-@jopa_function('jopa.operator.ternary', auto_add=True)
+@jopa_pyfunc('jopa.operator.ternary', auto_add=True)
 def JOPATernary(arg, brace):
     if not isinstance(arg, JOPABoolean):
         raise JOPAException('Non-bool condition')
@@ -285,26 +285,26 @@ class JOPAEvalNthLiteral(JOPAObject):
             return self.answer
         return JOPAEvalNthLiteral(self.n, self.all, self.i + 1, self.answer)
 
-@jopa_function('jopa.function.of', auto_add=True)
-@takes_additional_arg('argname', literal=True)
-@takes_additional_arg('function', literal=True)
+@jopa_pyfunc('jopa.function.of', auto_add=True)
+@jopa_pyfunc_takes_additional_arg('argname', literal=True)
+@jopa_pyfunc_takes_additional_arg('function', literal=True)
 def JOPAFunctionOf(arg, brace, function=None, argname=None):
         function.context[str(argname)] = arg
         return function.eval()
 
-@jopa_function('jopa.string.equal', auto_add=True)
-@takes_additional_arg('string1', verificator=isstring)
+@jopa_pyfunc('jopa.string.equal', auto_add=True)
+@jopa_pyfunc_takes_additional_arg('string1', verificator=isstring)
 def JOPAStringEqual(string2, brace, string1):
     if not isinstance(string2, JOPAString):
         raise JOPAException('jopa.string.equal requires 2nd string')
     return JOPABool(str(string1) == str(string2))
 
-@jopa_function('jopa.operator.uncallable', auto_add=True)
+@jopa_pyfunc('jopa.operator.uncallable', auto_add=True)
 def JOPAUncallable(arg, brace):
     raise JOPAException('uncallable was called with "%s"' % str(arg))
 
-@jopa_function('jopa.string.surround', auto_add=True)
-@takes_additional_arg('surr', verificator=isstring)
+@jopa_pyfunc('jopa.string.surround', auto_add=True)
+@jopa_pyfunc_takes_additional_arg('surr', verificator=isstring)
 def JOPAStringSurround(arg, brace, surr=None):
     return JOPAString(str(surr) + str(arg) + str(surr))
 
