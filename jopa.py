@@ -35,6 +35,7 @@ class JOPAObjectPackage(JOPAObject):
     def __init__(self, name, dic=None):
         JOPAObject.__init__(self)
         self.dic, self.name = dic or {}, name
+        self.bindable = []
     def __call__(self, arg, brace):
         if arg in self.dic: return self.dic[arg]
         raise JOPAException('"%s" not found in "%s"' % (str(arg), str(self)))
@@ -306,20 +307,36 @@ def JOPAStringEqual(string2, brace, string1):
 def JOPAUncallable(arg, brace):
     raise JOPAException('uncallable was called with "%s"' % str(arg))
 
-@jopa_pyfunc('jopa.package.extend', auto_add=True)
+@jopa_pyfunc('jopa.package.set', auto_add=True)
 @jopa_pyfunc_takes_additional_arg('package', verificator=ispkg)
 @jopa_pyfunc_takes_additional_arg('name', verificator=isstr)
-def JOPAPackageExtend(arg, brace, package=None, name=None):
+def JOPAPackageSet(arg, brace, package=None, name=None):
     package.dic[str(name)] = arg
     return JOPAIdent
 
-@jopa_pyfunc('jopa.package.create', auto_add=True)
+@jopa_pyfunc('jopa.package.method', auto_add=True)
 @jopa_pyfunc_takes_additional_arg('package', verificator=ispkg)
+@jopa_pyfunc_takes_additional_arg('name', verificator=isstr)
+def JOPAPackageMethod(arg, brace, package=None, name=None):
+    package.dic[str(name)] = arg
+    package.bindable.append(str(name))
+    return JOPAIdent
+
+@jopa_pyfunc('jopa.package.create', auto_add=True)
 @jopa_pyfunc_takes_additional_arg('pkgdesc', verificator=isstr)
 def JOPAPackageCreate(pkgname, brace, package=None, pkgdesc=None):
     isstr(pkgname)
-    package.dic[str(pkgname)] = JOPAObjectPackage(pkgdesc)
-    return JOPAIdent
+    return JOPAObjectPackage(str(pkgdesc))
+
+@jopa_pyfunc('jopa.package.instantiate', auto_add=True)
+def JOPAPackageInstantiate(pkg, brace, package=None, pkgdesc=None):
+    ispkg(pkg)
+    dic = pkg.dic.copy()
+    new_instance = JOPAObjectPackage('instance of ' + str(pkg), dic)
+    for k, v in new_instance.dic.items():
+        if k in pkg.bindable:
+            new_instance.dic[k] = v(new_instance, brace)
+    return new_instance
 
 ### Syntax transformations ###
 
@@ -386,10 +403,23 @@ TRANSFORMATIONS = {
 
 jopa_stdlib = """(
 jopa syntax enable curly_braced_functions
-jopa package extend (jopa string) (jopa string literal surround)
+jopa package set (jopa string) (jopa string literal surround)
     (jopa function of s (jopa function of c (jopa string create s c s)))
-jopa package extend (jopa operator) (jopa string literal ignore)
+jopa package set (jopa operator) (jopa string literal ignore)
     { x | jopa operator ident }
+jopa package set (jopa) (jopa string literal (myobject))
+    (jopa package create
+        (jopa string literal myobject)
+        (jopa string literal (('my test object package')))
+    )
+jopa package set (jopa myobject) (jopa string literal value)
+    (jopa string literal MY)
+jopa package method (jopa myobject) (jopa string literal whose)
+    {x | x value}
+jopa package set (jopa) (jopa string literal instance)
+    (jopa package instantiate (jopa myobject))
+jopa package set (jopa instance) (jopa string literal value)
+    (jopa string literal HEH)
 )"""
 
 JOPABrace(jopa_stdlib).eval() # Complete the jopa_ro opject with jopa code
