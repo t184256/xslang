@@ -57,6 +57,8 @@ class JOPASyntaxEnable(JOPAObject):
         return JOPAIdent
     def __str__(self): return 'jopa.syntax.enable'
 
+### Standard library definition phase 1/3: empty packages and primitives
+
 jopa_ro = JOPAObjectPackage('jopa root package', {
     'operator': JOPAObjectPackage('jopa.operator package'),
     'function': JOPAObjectPackage('jopa.function package'),
@@ -74,6 +76,7 @@ jopa_ro = JOPAObjectPackage('jopa root package', {
         'tab': JOPAString('\t'),
         'newline': JOPAString('\n'),
     }),
+    'package': JOPAObjectPackage('jopa.package package'),
     'syntax': JOPAObjectPackage('jopa.syntax package', {
         'enable': JOPASyntaxEnable(),
     }),
@@ -243,9 +246,10 @@ def jopa_pyfunc_takes_additional_arg(argname, literal=False, verificator=None):
         return PartiallyApplied
     return transform
 
-isstring = lambda s: isinstance (s, JOPAString) or 'argument is not a string'
+isstr = lambda s: isinstance (s, JOPAString) or 'argument is not a string'
+ispkg = lambda p: isinstance (p, JOPAObjectPackage) or 'argument is not a pkg'
 
-### Standard library ###
+### Standard library definition phase 2/3: functions implemented in Python
 
 @jopa_pyfunc('jopa.context.get', auto_add=True)
 def JOPAContextGet(arg, brace):
@@ -261,9 +265,6 @@ def JOPAContextSet(arg, brace, valname=None):
 
 @jopa_pyfunc('jopa.operator.ident', auto_add=True)
 def JOPAIdent(arg, brace): return arg # Could be: '(jopa function of x (x))'
-
-jopa_ro_add('jopa.operator.ignore', \
-            '(jopa function of x (jopa operator ident))')
 
 @jopa_pyfunc('jopa.operator.ternary', auto_add=True)
 def JOPATernary(arg, brace):
@@ -295,7 +296,7 @@ def JOPAFunctionOf(arg, brace, function=None, argname=None):
         return function.eval()
 
 @jopa_pyfunc('jopa.string.equal', auto_add=True)
-@jopa_pyfunc_takes_additional_arg('string1', verificator=isstring)
+@jopa_pyfunc_takes_additional_arg('string1', verificator=isstr)
 def JOPAStringEqual(string2, brace, string1):
     if not isinstance(string2, JOPAString):
         raise JOPAException('jopa.string.equal requires 2nd string')
@@ -305,8 +306,20 @@ def JOPAStringEqual(string2, brace, string1):
 def JOPAUncallable(arg, brace):
     raise JOPAException('uncallable was called with "%s"' % str(arg))
 
-jopa_ro_add('jopa.string.surround',
-    '(jopa function of s (jopa function of c (jopa string create s c s)))')
+@jopa_pyfunc('jopa.package.extend', auto_add=True)
+@jopa_pyfunc_takes_additional_arg('package', verificator=ispkg)
+@jopa_pyfunc_takes_additional_arg('name', verificator=isstr)
+def JOPAPackageExtend(arg, brace, package=None, name=None):
+    package.dic[str(name)] = arg
+    return JOPAIdent
+
+@jopa_pyfunc('jopa.package.create', auto_add=True)
+@jopa_pyfunc_takes_additional_arg('package', verificator=ispkg)
+@jopa_pyfunc_takes_additional_arg('pkgdesc', verificator=isstr)
+def JOPAPackageCreate(pkgname, brace, package=None, pkgdesc=None):
+    isstr(pkgname)
+    package.dic[str(pkgname)] = JOPAObjectPackage(pkgdesc)
+    return JOPAIdent
 
 ### Syntax transformations ###
 
@@ -368,6 +381,18 @@ TRANSFORMATIONS = {
     generator_to_callable(curly_braced_functions, src),
     'dots_to_spaces': translation('.', ' '),
 }
+
+### Standard library definition phase 3/3: jopa code
+
+jopa_stdlib = """(
+jopa syntax enable curly_braced_functions
+jopa package extend (jopa string) (jopa string literal surround)
+    (jopa function of s (jopa function of c (jopa string create s c s)))
+jopa package extend (jopa operator) (jopa string literal ignore)
+    { x | jopa operator ident }
+)"""
+
+JOPABrace(jopa_stdlib).eval() # Complete the jopa_ro opject with jopa code
 
 ###
 if __name__ == '__main__': print JOPABrace(raw_input(), rootobj=jopa_ro).eval()
