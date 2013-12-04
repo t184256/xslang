@@ -95,7 +95,8 @@ class XInterpreter(object):
                 n = XInterpreter(self.stream, no_first_brace=True, parent=self)
                 n = n.eval()
             elif n == ')': return f
-            if (isinstance(n, str)): if n in self: n = self[n]
+            if (isinstance(n, str)):
+                if n in self: n = self[n]
             if f is None: f = n
             else: f = f(n, interpreter=self)
             while 'init' in dir(f):
@@ -120,12 +121,6 @@ def steal_literal(interpreter):
     while not s or s.isspace(): s = interpreter.token_stream.next()
     if s == '(': return stream_read_until_closing_brace(interpreter.stream)
     return s
-
-class XString(XObject)
-    def init(self, interpreter):
-        return self[steal_literal(interpreter).strip()]
-    def __call__(self, arg, interpreter):
-        return self[arg]
 
 class XDictionaryObject(XObject, dict):
     def init(self, interpreter):
