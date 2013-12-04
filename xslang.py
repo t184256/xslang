@@ -97,6 +97,7 @@ class XInterpreter(object):
             if n.isspace() or n == '': continue
             elif n == '(':
                 n = XInterpreter(self.stream, no_first_brace=True, parent=self)
+                self.currently_mutating = n
                 n = n.eval()
             elif n == ')': return f
             if (isinstance(n, str)):
@@ -113,6 +114,7 @@ class XInterpreter(object):
                 else: f = transformed
                 assert isinstance(f, XObject)
             self.previous.append(f)
+            self.currently_mutating = None
 
     def apply(f, n):
         return f(n, self)
@@ -189,6 +191,7 @@ class XDictionaryObject(XObject, dict):
         l = steal_literal(interpreter)
         if not l: return
         return self[l]
+    def __str__(self): return 'XDICT<' + ','.join(sorted(self.keys())) + '>'
 
 class Xstring(XDictionaryObject):
     def __init__(self, s): self._s = s
@@ -218,11 +221,14 @@ xslang_rootobj = XDictionaryObject({
         'set': Xset,
         'setlit': Xsetlit(),
     }),
+    'function': XDictionaryObject({}),
     'operator': XDictionaryObject({
         'ident': Xident,
         'ignore': Xignore,
         'literal': XstringLiteralCreator(),
     }),
+    'package': XDictionaryObject({}),
+    'types': XDictionaryObject({}),
 })
 
 if __name__ == '__main__': print XInterpreter(raw_input()).eval()

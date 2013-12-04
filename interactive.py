@@ -83,13 +83,14 @@ def shorten(s, maxlen):
     return s[:maxlen - 3] + '..' + s[-1]
 
 def printstate(b, shorten_to=80, stars=1):
-    for f in b.previous:
+    for f in b.previous + [b.currently_mutating]:
         if isinstance(f, XInterpreter):
             printstate(f, shorten_to, stars=1)
         s = str(f)
         if not s: s = '...'
-        print '*' * stars, shorten(s, shorten_to - stars - 1)
-    print '.' * stars, b.currently_mutating
+        symbol = '*' if f != b.currently_mutating else '.'
+        print symbol * stars, shorten(s, shorten_to - stars - 1)
+#    print '.' * stars, b.currently_mutating
 
 INITIAL_S = '('
 
@@ -114,6 +115,9 @@ def main():
             curr = None
             if i.xi.previous: curr = i.xi.previous[:-1]
             if i.xi.currently_mutating: curr = i.xi.currently_mutating
+            while isinstance(curr, XInterpreter):
+                if not curr.currently_mutating is None:
+                    curr = curr.currently_mutating; continue
             if curr:
                 if isinstance(curr, XDictionaryObject):
                     choices = curr.keys() + choices
