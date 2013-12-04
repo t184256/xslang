@@ -20,6 +20,7 @@ from xslang import XInterpreter, XException, XDictionaryObject
 
 import sys, time, re, traceback
 
+# TODO: remove
 ugly_objectdesc = re.compile(r'<(\S*) object at .*>')
 
 class BackspaceException(Exception): pass
@@ -27,6 +28,7 @@ class ControlWException(Exception): pass
 class EnterException(Exception): pass
 class TabException(Exception): pass
 
+# TODO: compact
 try:
     from msvcrt import getch
 except ImportError:
@@ -41,6 +43,7 @@ except ImportError:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
         return ch
 
+# TODO: rewrite as a generator
 class Interactive(object):
     def __init__(self, initial_string=None):
         self.s = initial_string
@@ -59,6 +62,7 @@ class Interactive(object):
         if self.s:
             self.h, c, self.s = self.h + self.s[0], self.s[0], self.s[1:]
             return c
+# TODO: print only in printstate
         print '\n' * 24
         printstate(self.xi)
         if self.display_error is None:
