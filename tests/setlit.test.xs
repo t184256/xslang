@@ -1,4 +1,4 @@
-(xslang context setlit x xslang 
- x operator literal OK)
+(xslang context setlit op (xslang operator)
+ op literal OK)
 ###
 X<'OK'>

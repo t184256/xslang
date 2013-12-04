@@ -23,18 +23,13 @@ class XObject(object):
 
 class XException(Exception): pass
 
-#class XCallable(XObject): pass
-class XUncallable(XObject):
-    def __call__(self):
-        raise XException('Uncallable ' + XObject.__str__(self) + ' called')
-#
 ## TODO: implement primitive types in xslang
-#class XBoolean(XUncallable):
+#class XBoolean(XObject):
 #    @staticmethod
 #    def convert(obj): return XTrue() if obj else XFalse()
 #class XTrue(XBoolean): pass
 #class XFalse(XBoolean): pass
-class XNone(XUncallable): pass
+class XNone(XObject): pass
 
 ### Streaming ###
 
@@ -124,34 +119,6 @@ class XInterpreter(object):
 
 ### Helper decorators for standard library ###
 
-def XFunction(initializer=None):
-    def transform(func):
-        class XFunc(XObject):
-            def init(self, *a, **kwa):
-                return initializer(*a, **kwa) if initializer else None
-            def __call__(self, *a, **kwa):
-                return func(*a, **kwa)
-        return XFunc()
-    return transform
-
-### Standard library ###
-
-@XFunction()
-def Xident(arg, interpreter): return arg
-@XFunction()
-def Xignore(arg, interpreter): return Xident
-
-class XLiteral(XObject, str):
-    def init(self, interpreter):
-        self.s = ''
-        self.s = steal_literal(interpreter)
-        if not self.s: return
-        return XLiteral(self.s)
-    def __call__(self, arg, interpreter):
-        raise XException('Attempted to call a literal ' + self.s)
-    def __str__(self): return XObject.__str__(self)
-    def str(self): return str.__str__(self)
-
 def steal_literal(interpreter):
     s = ''
     while not s or s.isspace():
@@ -160,33 +127,101 @@ def steal_literal(interpreter):
     if s == '(': return stream_read_until_closing_brace(interpreter.stream)
     return s
 
+def XFunction(name=None, initializer=None):
+    def transform(func):
+        class XFunc(XObject):
+            def init(self, *a, **kwa):
+                return initializer(*a, **kwa) if initializer else None
+            def __call__(self, *a, **kwa):
+                return func(*a, **kwa)
+            def __str__(self): return 'X<' + name + '>' \
+                    if name is not None else XObject.__str__(self)
+        return XFunc()
+    return transform
+
+def XFunction_takes_additional_literal(literal_name):
+    def transform(func):
+        class XMutantConsumingALiteral(XObject):
+            def __init__(self, literal=None):
+                self._literal = literal
+            def init(self, interpreter):
+                l = self._literal
+                @XFunction('LiteralInjector %s="%s" -> %s' %
+                           (literal_name, l, str(func)))
+                def XLiteralInjector(*a, **kwa):
+                    kwa[literal_name] = l
+                    return func(*a, **kwa)
+                if not l is None: return XLiteralInjector
+                l = steal_literal(interpreter)
+                if l: return Xsetlit(literal = l)
+                return self
+            __str__ = lambda s: 'X<MutantConsumingALiteral to %s>' % str(func)
+        return XMutantConsumingALiteral
+    return transform
+
+def XFunction_takes_additional_argument(arg_name, convertor=None):
+    def transform(func):
+        @XFunction('ArgInjector %s -> %s' % (arg_name, str(func)))
+        def XArgInjector(arg, interpreter, **kwa_):
+            arg = convertor(arg)
+            @XFunction('ArgInjector %s=(%s) -> %s' % (arg_name, arg, str(func)))
+            def ProxyFunc(*a, **kwa):
+                kwa.update(kwa_)
+                kwa[arg_name] = arg
+                return func(*a, **kwa)
+            return ProxyFunc
+        return XArgInjector
+    return transform
+
+def Xc_tostr(s):
+    if isinstance(s, Xstring): return s.str()
+    raise XException('Not an Xstring: ' + str(s))
+
+### Standard library ###
+
+@XFunction('ident')
+def Xident(arg, interpreter): return arg
+@XFunction('ignore')
+def Xignore(arg, interpreter): return Xident
+
 class XDictionaryObject(XObject, dict):
     def init(self, interpreter):
         l = steal_literal(interpreter)
         if not l: return
         return self[l]
 
-class Xsetlit(XObject):
-    def __init__(self, literal=None):
-        self._literal = literal
+class Xstring(XDictionaryObject):
+    def __init__(self, s): self._s = s
+    def __str__(self): return 'X<\'' + self._s + '\'>'
+    def str(self): return self._s
+
+class XstringLiteralCreator(XObject):
     def init(self, interpreter):
-        if not self._literal is None: return
         l = steal_literal(interpreter)
-        if l: return Xsetlit(literal = l)
-        return self
-    def __call__(self, arg, interpreter):
-        if not self._literal is None:
-            interpreter.context[self._literal] = arg
-        return Xident
+        return Xstring(l)
+
+@XFunction('setlit')
+@XFunction_takes_additional_literal('varname')
+def Xsetlit(arg, interpreter, varname=None):
+    interpreter.context[varname] = arg
+    return Xident
+
+@XFunction('set')
+@XFunction_takes_additional_argument('varname', convertor=Xc_tostr)
+def Xset(arg, interpreter, varname=None):
+    interpreter.context[varname] = arg
+    return Xident
+
 
 xslang_rootobj = XDictionaryObject({
     'context': XDictionaryObject({
+        'set': Xset,
         'setlit': Xsetlit(),
     }),
     'operator': XDictionaryObject({
         'ident': Xident,
         'ignore': Xignore,
-        'literal': XLiteral(),
+        'literal': XstringLiteralCreator(),
     }),
 })
 

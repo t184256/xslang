@@ -16,7 +16,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-from xslang import XInterpreter
+from xslang import XInterpreter, XException
 import sys, os, traceback
 
 if __name__ == '__main__':
@@ -24,8 +24,8 @@ if __name__ == '__main__':
     failed = []
     sys.stdout.write('%d: ' % len(TESTFILES))
     for i, testfile in enumerate(TESTFILES):
-        testfile = os.path.join('tests', testfile)
-        c, r = file(testfile).read().split('###', 1)
+        testfilepath = os.path.join('tests', testfile)
+        c, r = file(testfilepath).read().split('###', 1)
         c, r = c.strip(), r.strip()
         try:
             e = XInterpreter(c).eval()
@@ -34,8 +34,7 @@ if __name__ == '__main__':
             print 'WHILE EVALUATING', testfile
             print c
             print traceback.format_exc(ex)
-            e = 'XException(%s)' % ex
-            failed.append(testfile)
+            e = 'XException(%s)' % ex if isinstance(ex, XException) else str(ex)
         if not str(e) == r:
             print
             print 'A test failed:      ', c
@@ -47,7 +46,7 @@ if __name__ == '__main__':
     print
     for f in failed:
         print 'TEST FAILED:', testfile
-    else:
+    if not failed:
         print 'All tests passed OK'
         sys.exit(0)
     sys.exit(1)
