@@ -39,10 +39,10 @@ def stream_str(string):
         yield c
         if not string: return
 
-def stream_read_until_closing_brace(stream, opened=1):
+def stream_read_until_closing_brace(tstream, opened=1):
     s, b = '', opened
     while b > 0 or not ('(' in s or ')' in s):
-        c = stream.next(); s += c
+        c = tstream.next(); s += c
         if c == '(': b += 1
         elif c == ')': b -= 1
         if c.isspace() or c in '()':
@@ -71,8 +71,9 @@ class XInterpreter(object):
                 no_first_brace=False, parent=None):
         self.context = {root_obj_name: root_obj or xslang_rootobj}
         self.context['#'] = XStringLiteralMutator()
-        self.stream = stream_str(stream) if isinstance(stream, str) else stream
-        self.token_stream = stream_read_word_or_brace(self.stream)
+        self.token_stream = stream_read_word_or_brace(
+                stream_str(stream) if isinstance(stream, str) else stream
+        )
         self.parent = parent
         self.no_first_brace = no_first_brace
         self.previous = [] # For dirty introspection
@@ -91,13 +92,13 @@ class XInterpreter(object):
 
     def eval(self):
         if not self.no_first_brace:
-           if self.stream.next() != '(': raise XException('No (')
+           if self.token_stream.next() != '(': raise XException('No (')
         f = None
         while True:
             n = self.token_stream.next()
             if n.isspace() or n == '': continue
             elif n == '(':
-                n = XInterpreter(self.stream, no_first_brace=True, parent=self)
+                n = XInterpreter(self.token_stream, no_first_brace=True, parent=self)
                 self.currently_mutating = n
                 n = n.eval()
             elif n == ')': return f
@@ -116,9 +117,6 @@ class XInterpreter(object):
                 assert isinstance(f, XObject)
             self.previous.append(f)
             self.currently_mutating = None
-
-    def apply(f, n):
-        return f(n, self)
 
 ### Helper decorators for standard library ###
 
@@ -159,7 +157,7 @@ class XStringLiteralMutator(XObject):
         while not s or s.isspace():
             s = interpreter.token_stream.next()
             if not s: return None
-        if s == '(': s = stream_read_until_closing_brace(interpreter.stream)
+        if s == '(': s = stream_read_until_closing_brace(interpreter.token_stream)
         return Xstring(s)
     def __str__(self): return 'X<"???">'
 
@@ -198,6 +196,60 @@ def XfunctionOf(interpreter, arg, varname=None, body=None):
     interpreter.context[varname] = arg
     return XInterpreter(body, parent=interpreter).eval()
 
+### Syntax transformations ###
+
+def stream_detokenize_stream(tstream):
+    while True:
+        s = tstream.next()
+        if not s: continue
+        while s:
+            c, s = s[0], s[1:]
+            yield c
+
+def stream_token_of_a_brace(tstream):
+    char_stream = stream_detokenize_stream(tstream)
+    assert(char_stream.next() == '(')
+    s = stream_read_until_closing_brace(char_stream, 1)
+    return stream_read_word_or_brace(stream_str(s))
+
+def dotty_literals(stream):
+    while True:
+        t = stream.next()
+        if not '.' in t: yield t; continue
+        if t == '.':
+            yield '('; yield '#'; yield ' '
+            yield '('
+            for t in stream_token_of_a_brace(stream): yield t
+            yield ''; yield ')'
+            yield ''; yield ')'
+            continue
+        if '.' in t and not t.startswith('.'):
+            p, t = t.split('.', 1)
+            t = '.' + t
+            yield p; yield ' '
+        while t.startswith('.') and '.' in t[1:]:
+            p, t = t[1:].split('.', 1)
+            t = '.' + t
+            yield ' '
+            yield '('; yield '#'; yield ' '; yield p; yield ''; yield ')'
+        yield ' '
+        yield '('; yield '#'; yield ' '; yield t[1:]; yield ''; yield ')'
+
+TRANSFORMATIONS = {
+    'dotty_literals': dotty_literals,
+}
+
+@XFunction('function.of')
+def XsyntaxEnable(interpreter, transformation_name):
+    transformation_name = Xc_str(transformation_name)
+    transform = TRANSFORMATIONS[transformation_name]
+    interpreter.token_stream = transform(interpreter.token_stream)
+#    raise Exception(''.join(interpreter.token_stream))
+#    stream = transform(interpreter.stream)
+#    return XInterpreter(stream, parent=interpreter).eval()
+#    interpreter.wrap_stream(transform)
+    return Xident
+
 xslang_rootobj = XDictionaryObject({
     'context': XDictionaryObject({
         'set': Xset,
@@ -211,6 +263,9 @@ xslang_rootobj = XDictionaryObject({
         'ignore': Xignore,
     }),
     'package': XDictionaryObject({}),
+    'syntax': XDictionaryObject({
+            'enable': XsyntaxEnable,
+    }),
     'types': XDictionaryObject({}),
 })
 
