@@ -1,6 +1,6 @@
-(xslang context set (xslang operator literal x) xslang
- x context set (xslang operator literal ctx) (xslang context)
- ctx set (xslang operator literal op) (xslang operator)
- op literal OK)
+(xslang (# context) (# set) (# x) xslang
+ x (# context) (# set) (# ctx) (xslang (# context))
+ ctx (# set) (# op) (# OK)
+ op)
 ###
 X<'OK'>

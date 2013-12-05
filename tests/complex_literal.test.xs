@@ -1,3 +1,3 @@
-(xslang operator literal ((hello)))
+(# ((hello)))
 ###
 X<'(hello)'>

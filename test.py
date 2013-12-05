@@ -21,11 +21,16 @@ import sys, os, traceback
 
 if __name__ == '__main__':
     TESTFILES = os.listdir('tests')
-    failed = []
+    failed, disabled = [], []
     sys.stdout.write('%d: ' % len(TESTFILES))
     for i, testfile in enumerate(TESTFILES):
         testfilepath = os.path.join('tests', testfile)
-        c, r = file(testfilepath).read().split('###', 1)
+        s = file(testfilepath).read()
+        if not s.startswith('('):
+            disabled.append(testfile)
+            sys.stdout.write('_')
+            continue
+        c, r = s.split('###', 1)
         c, r = c.strip(), r.strip()
         try:
             e = XInterpreter(c).eval()
@@ -44,8 +49,10 @@ if __name__ == '__main__':
         if not failed:
             sys.stdout.write('+')
     print
+    for f in disabled:
+        print 'TEST DISABLED:', f
     for f in failed:
-        print 'TEST FAILED:', testfile
+        print 'TEST FAILED:', f
     if not failed:
         print 'All tests passed OK'
         sys.exit(0)

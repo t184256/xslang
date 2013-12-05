@@ -69,7 +69,7 @@ class Interactive(object):
             print '\n' * 2
         else:
             print '\n' + self.display_error + '\n'
-        print self.prompt() + self.h + '#'
+        print self.prompt() + self.h + '|'
         self.interpreter_got_recreated = False
         self.display_error = None
         c = self.subsource()
@@ -89,7 +89,7 @@ def shorten(s, maxlen):
 def printstate(b, shorten_to=80, stars=1):
     for f in b.previous + [b.currently_mutating]:
         if isinstance(f, XInterpreter):
-            printstate(f, shorten_to, stars=1)
+            printstate(f, shorten_to, stars=stars+1)
         s = str(f)
         if not s: s = '...'
         symbol = '*' if f != b.currently_mutating else '.'

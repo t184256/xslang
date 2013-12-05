@@ -1,7 +1,7 @@
 (
- xslang operator ignore xslang
- xslang operator ignore (xslang operator)
- xslang operator literal l
+ xslang (# operator) (# ignore) (xslang)
+ xslang (# operator) (# ignore) (xslang (# operator))
+ (# l)
 )
 ###
 X<'l'>

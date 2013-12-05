@@ -1,3 +1,3 @@
-(xslang operator ident xslang operator literal l)
+(xslang (# operator) (# ident) (# l))
 ###
 X<'l'>

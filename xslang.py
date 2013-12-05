@@ -70,6 +70,7 @@ class XInterpreter(object):
     def __init__(self, stream, root_obj=None, root_obj_name='xslang', \
                 no_first_brace=False, parent=None):
         self.context = {root_obj_name: root_obj or xslang_rootobj}
+        self.context['#'] = XStringLiteralMutator()
         self.stream = stream_str(stream) if isinstance(stream, str) else stream
         self.token_stream = stream_read_word_or_brace(self.stream)
         self.parent = parent
@@ -104,11 +105,11 @@ class XInterpreter(object):
                 if n in self: n = self[n]
                 else: raise XException('No ' + n + ' in current context!')
             if f is None: f = n
-            else: f = f(n, interpreter=self)
+            else: f = f(self, n)
             assert isinstance(f, XObject)
-            while 'init' in dir(f):
+            while '__mutate__' in dir(f):
                 self.currently_mutating = f
-                transformed = f.init(interpreter=self)
+                transformed = f.__mutate__(interpreter=self)
                 #print f, 'TRANSFORMED INTO', transformed
                 if transformed is None: break # Cancel transformation
                 else: f = transformed
@@ -121,52 +122,23 @@ class XInterpreter(object):
 
 ### Helper decorators for standard library ###
 
-def steal_literal(interpreter):
-    s = ''
-    while not s or s.isspace():
-        s = interpreter.token_stream.next()
-        if not s: return None
-    if s == '(': return stream_read_until_closing_brace(interpreter.stream)
-    return s
-
-def XFunction(name=None, initializer=None):
+def XFunction(name=None, converter=None):
     def transform(func):
         class XFunc(XObject):
-            def init(self, *a, **kwa):
-                return initializer(*a, **kwa) if initializer else None
-            def __call__(self, *a, **kwa):
-                return func(*a, **kwa)
+            def __call__(self, interpreter, arg, *a, **kwa):
+                if not converter is None: arg = converter(arg)
+                return func(interpreter, arg, *a, **kwa)
             def __str__(self): return 'X<' + name + '>' \
                     if name is not None else XObject.__str__(self)
         return XFunc()
     return transform
 
-def XFunction_takes_additional_literal(literal_name):
+def XFunction_takes_additional_arg(arg_name, converter=None):
     def transform(func):
-        class XMutantConsumingALiteral(XObject):
-            def __init__(self, literal=None):
-                self._literal = literal
-            def init(self, interpreter):
-                l = self._literal
-                @XFunction('LiteralInjector %s="%s" -> %s' %
-                           (literal_name, l, str(func)))
-                def XLiteralInjector(*a, **kwa):
-                    kwa[literal_name] = l
-                    return func(*a, **kwa)
-                if not l is None: return XLiteralInjector
-                l = steal_literal(interpreter)
-                if l: return Xsetlit(literal = l)
-                return self
-            __str__ = lambda s: 'X<MutantConsumingALiteral to %s>' % str(func)
-        return XMutantConsumingALiteral
-    return transform
-
-def XFunction_takes_additional_argument(arg_name, convertor=None):
-    def transform(func):
-        @XFunction('ArgInjector %s -> %s' % (arg_name, str(func)))
-        def XArgInjector(arg, interpreter, **kwa_):
-            arg = convertor(arg)
-            @XFunction('ArgInjector %s=(%s) -> %s' % (arg_name, arg, str(func)))
+        @XFunction('%s %s=(???)' % (str(func), arg_name))
+        def XArgInjector(interpreter, arg, **kwa_):
+            if not converter is None: arg = converter(arg)
+            @XFunction('%s %s=(%s)' % (func, arg_name, arg))
             def ProxyFunc(*a, **kwa):
                 kwa.update(kwa_)
                 kwa[arg_name] = arg
@@ -175,22 +147,32 @@ def XFunction_takes_additional_argument(arg_name, convertor=None):
         return XArgInjector
     return transform
 
-def Xc_tostr(s):
+def Xc_str(s):
     if isinstance(s, Xstring): return s.str()
     raise XException('Not an Xstring: ' + str(s))
 
 ### Standard library ###
 
+class XStringLiteralMutator(XObject):
+    def __mutate__(self, interpreter):
+        s = ''
+        while not s or s.isspace():
+            s = interpreter.token_stream.next()
+            if not s: return None
+        if s == '(': s = stream_read_until_closing_brace(interpreter.stream)
+        return Xstring(s)
+    def __str__(self): return 'X<"???">'
+
 @XFunction('ident')
-def Xident(arg, interpreter): return arg
+def Xident(interpreter, arg): return arg
 @XFunction('ignore')
-def Xignore(arg, interpreter): return Xident
+def Xignore(interpreter, arg): return Xident
 
 class XDictionaryObject(XObject, dict):
-    def init(self, interpreter):
-        l = steal_literal(interpreter)
-        if not l: return
-        return self[l]
+    def __call__(self, interpreter, arg):
+        arg = Xc_str(arg)
+        if not arg in self: raise XException('"%s" not found!' % arg)
+        return self[arg]
     def __str__(self): return 'XDICT<' + ','.join(sorted(self.keys())) + '>'
 
 class Xstring(XDictionaryObject):
@@ -198,34 +180,35 @@ class Xstring(XDictionaryObject):
     def __str__(self): return 'X<\'' + self._s + '\'>'
     def str(self): return self._s
 
-class XstringLiteralCreator(XObject):
-    def init(self, interpreter):
-        l = steal_literal(interpreter)
-        return Xstring(l)
-
-@XFunction('setlit')
-@XFunction_takes_additional_literal('varname')
-def Xsetlit(arg, interpreter, varname=None):
-    interpreter.context[varname] = arg
-    return Xident
-
 @XFunction('set')
-@XFunction_takes_additional_argument('varname', convertor=Xc_tostr)
-def Xset(arg, interpreter, varname=None):
+@XFunction_takes_additional_arg('varname', converter=Xc_str)
+def Xset(interpreter, arg, varname=None):
     interpreter.context[varname] = arg
     return Xident
 
+@XFunction('get')
+def Xget(interpreter, varname):
+    varname = Xc_str(varname)
+    return interpreter.context[varname]
+
+@XFunction_takes_additional_arg('varname', converter=Xc_str)
+@XFunction_takes_additional_arg('body', converter=Xc_str)
+@XFunction('function.of')
+def XfunctionOf(interpreter, arg, varname=None, body=None):
+    interpreter.context[varname] = arg
+    return XInterpreter(body, parent=interpreter).eval()
 
 xslang_rootobj = XDictionaryObject({
     'context': XDictionaryObject({
         'set': Xset,
-        'setlit': Xsetlit(),
+        'get': Xget,
     }),
-    'function': XDictionaryObject({}),
+    'function': XDictionaryObject({
+        'of': XfunctionOf,
+    }),
     'operator': XDictionaryObject({
         'ident': Xident,
         'ignore': Xignore,
-        'literal': XstringLiteralCreator(),
     }),
     'package': XDictionaryObject({}),
     'types': XDictionaryObject({}),
