@@ -55,14 +55,17 @@ def stream_read_word_or_brace(stream):
        ['(', '(', 'xslang', ' ', 'operator', '', ')', ' ', 'ident', '', ')']"""
     s = ''
     while True:
-        s += stream.next()
-        if s:
-            if s[-1] == '(' or s[-1].isspace():
-                if s[:-1]: yield s[:-1]
-                yield s[-1]; s = ''
-        if s:
-            if s[-1] == ')': yield s[:-1]; yield ''; yield s[-1]; s = ''
-
+        try:
+            s += stream.next()
+            if s:
+                if s[-1] == '(' or s[-1].isspace():
+                    if s[:-1]: yield s[:-1]
+                    yield s[-1]; s = ''
+            if s:
+                if s[-1] == ')': yield s[:-1]; yield ''; yield s[-1]; s = ''
+        except StopIteration:
+            yield s
+            raise StopIteration
 
 ### The interpreter ###
 
@@ -72,7 +75,8 @@ class XInterpreter(object):
         self.context = {root_obj_name: root_obj or xslang_rootobj}
         self.context['#'] = XStringLiteralMutator()
         self.token_stream = stream_read_word_or_brace(
-                stream_str(stream) if isinstance(stream, str) else stream
+                stream_str('(' + stream + ')')
+                if isinstance(stream, str) else stream
         )
         self.parent = parent
         self.no_first_brace = no_first_brace
