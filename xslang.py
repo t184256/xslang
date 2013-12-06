@@ -221,11 +221,9 @@ def dotty_literals(stream):
         t = stream.next()
         if not '.' in t: yield t; continue
         if t == '.':
-            yield '('; yield '#'; yield ' '
-            yield '('
+            for z in '(# (': yield z
             for t in stream_token_of_a_brace(stream): yield t
-            yield ''; yield ')'
-            yield ''; yield ')'
+            for z in ('', ')', '', ')'): yield z
             continue
         if '.' in t and not t.startswith('.'):
             p, t = t.split('.', 1)
@@ -234,10 +232,8 @@ def dotty_literals(stream):
         while t.startswith('.') and '.' in t[1:]:
             p, t = t[1:].split('.', 1)
             t = '.' + t
-            yield ' '
-            yield '('; yield '#'; yield ' '; yield p; yield ''; yield ')'
-        yield ' '
-        yield '('; yield '#'; yield ' '; yield t[1:]; yield ''; yield ')'
+            for z in (' ', '(', '#', ' ', p, '', ')'): yield z
+        for z in (' ', '(', '#', ' ', t[1:], '', ')'): yield z
 
 TRANSFORMATIONS = {
     'dotty_literals': dotty_literals,
