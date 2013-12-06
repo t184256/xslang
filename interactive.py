@@ -99,7 +99,17 @@ def printstate(b, shorten_to=80, stars=1):
 INITIAL_S = '('
 
 def main():
-    s = INITIAL_S if len(sys.argv) < 2 else INITIAL_S + ' '.join(sys.argv[1:])
+    argv = list(sys.argv[1:])
+
+    syntax_prefix, syntax_postfix = '', ''
+    for s in argv:
+        if s.startswith('+'):
+            syntax_prefix += '(xslang (# syntax) (# enable) (# %s) \n' % s[1:]
+            syntax_postfix += ')'
+            argv.remove(s)
+
+    print syntax_prefix
+    s = syntax_prefix + INITIAL_S + ' '.join(argv)
     display_error = None
     while True:
         try:
