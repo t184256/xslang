@@ -190,15 +190,14 @@ class Xstring(XDictionaryObject):
     def __str__(self): return 'X<\'' + self._s + '\'>'
     def str(self): return self._s
 
-@XFunction('set')
 @XFunction_takes_additional_arg('varname', converter=Xc_str)
+@XFunction('set')
 def Xset(interpreter, arg, varname=None):
     interpreter.context[varname] = arg
     return Xident
 
-@XFunction('get')
+@XFunction('get', converter=Xc_str)
 def Xget(interpreter, varname):
-    varname = Xc_str(varname)
     return interpreter.context[varname]
 
 @XFunction_takes_additional_arg('varname', converter=Xc_str)
@@ -222,20 +221,17 @@ class Xint(XDictionaryObject):
     def __str__(self): return 'X<int:%d>' % self._i
     def int(self): return self._i
 
-@XFunction('int.new')
+@XFunction('int.new', converter=Xc_str)
 def Xint_new(intepreter, string):
-    string = Xc_str(string)
     return Xint(int(string))
 
-@XFunction('int.add')
 @XFunction_takes_additional_arg('a', converter=Xc_int)
+@XFunction('int.add', converter=Xc_int)
 def Xint_add(intepreter, b, a=None):
-    b = Xc_int(b)
     return Xint(a + b)
 
-@XFunction('int.string')
+@XFunction('int.string', converter=Xc_int)
 def Xint_string(intepreter, i):
-    i = Xc_int(i)
     return Xstring(str(i))
 
 ### Syntax transformations ###
@@ -363,7 +359,7 @@ TRANSFORMATIONS = {
     'dotty_literals': dotty_literals,
     'curly_braced_functions': curly_braced_functions,
     'int_auto': int_auto,
-    'rich': composition(curly_braced_functions, dotty_literals, int_auto),
+    'rich': composition(int_auto, curly_braced_functions, dotty_literals),
 }
 
 @XFunction('syntax.enable')
