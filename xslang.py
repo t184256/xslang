@@ -225,8 +225,8 @@ def dotty_literals(stream):
         #print 't', t
         if not '.' in t: yield t; continue
         if t == '.':
-            inside = stream_tokens_of_a_brace(stream)
-            for z in tokens_forming_a_literal('(' + inside + ')'): yield z
+            inside = ''.join(stream_tokens_of_a_brace(stream))
+            for z in tokens_forming_a_literal(inside): yield z
             continue
         if '.' in t and not t.startswith('.'):
             p, t = t.split('.', 1)
@@ -239,6 +239,7 @@ def dotty_literals(stream):
         for z in tokens_forming_a_literal(t[1:]): yield z
 
 def surround(what, with_=' '):
+    # TODO: reimplement with a simplistic replace, left and right paddings
     def surr(tstream):
         for t in tstream:
             if not what in t: yield t
@@ -258,7 +259,7 @@ def transformation_composition(ti, *ts):
         return f
     return composed
 
-def curly_braced_functions(tstream):
+def curly_braced_functions_(tstream):
     while True:
         t = tstream.next()
         #print 't "%s"' % t
@@ -289,8 +290,9 @@ def curly_braced_functions_inside_a_brace(tstream):
                       tokens_forming_a_literal(argname) +
                       (' ', '(', '#', ' ', '(')): yield z
         contents = ''
-        while not contents or contents[-1] != '}':
+        while True:
             contents += tstream.next()
+            if contents.count('}') - contents.count('{') == 1: break
         contents = contents[:-1]
         #print 'cont', contents
         int_tstream = stream_read_word_or_brace(stream_str(contents))
@@ -304,21 +306,21 @@ def curly_braced_functions_inside_a_brace(tstream):
         #print ')))'
         for argname in argnames:
             for z in '', ')', '', ')', '', ')': yield z
+curly_braced_functions = transformation_composition(
+    surround('{'), surround('}'), surround('|'), curly_braced_functions_
+)
 
 TRANSFORMATIONS = {
     'dotty_literals': dotty_literals,
     'curly_braced_functions': curly_braced_functions,
-    #'curly_braced_functions': transformation_composition(
-    #    surround('{'), surround('}'), surround('|'), curly_braced_functions
-    #),
 }
 
 @XFunction('syntax.enable')
 def XsyntaxEnable(interpreter, transformation_name):
     transformation_name = Xc_str(transformation_name)
     transform = TRANSFORMATIONS[transformation_name]
-    interpreter.token_stream = transform(interpreter.token_stream)
 #    print 'transformation', transform
+    interpreter.token_stream = transform(interpreter.token_stream)
 #    print 'transformed', interpreter.token_stream
 #    raise Exception(list(interpreter.token_stream))
 #    raise Exception(''.join(interpreter.token_stream))

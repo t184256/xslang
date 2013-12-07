@@ -25,7 +25,7 @@ if __name__ == '__main__':
     sys.stdout.write('%d: ' % len(TESTFILES))
     for i, testfile in enumerate(TESTFILES):
         testfilepath = os.path.join('tests', testfile)
-        s = file(testfilepath).read().replace('\n', '\t')
+        s = file(testfilepath).read()
         if not s.startswith('('):
             disabled.append(testfile)
             sys.stdout.write('_')
