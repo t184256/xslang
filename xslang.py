@@ -215,7 +215,9 @@ def Xternary(interpreter, else_val, if_val, condition=None):
     return if_val if condition else else_val
 
 class Xint(XDictionaryObject):
-    def __init__(self, i): self._i = i
+    def __init__(self, i):
+        self._i = i
+        self['add'] = Xint_add(None, self)
     def __str__(self): return 'X<int:%d>' % self._i
     def int(self): return self._i
 
@@ -223,14 +225,12 @@ class Xint(XDictionaryObject):
 def Xint_new(intepreter, string):
     string = Xc_str(string)
     return Xint(int(string))
-Xint.new = Xint_new
 
 @XFunction('int.add')
 @XFunction_takes_additional_arg('a', converter=Xc_int)
 def Xint_add(intepreter, b, a=None):
     b = Xc_int(b)
     return Xint(a + b)
-Xint.add = Xint_add
 
 ### Syntax transformations ###
 
