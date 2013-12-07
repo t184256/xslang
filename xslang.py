@@ -221,10 +221,19 @@ def XfunctionOf(interpreter, arg, varname=None, body=None):
 def Xternary(interpreter, else_val, if_val, condition=None):
     return if_val if condition else else_val
 
+@XFunction_takes_additional_arg('condition', converter=Xc_bool)
+@XFunction_takes_additional_arg('if_body', converter=Xc_str)
+@XFunction('if', converter=Xc_str)
+def Xif(interpreter, else_body, if_body, condition=None):
+    body = if_body if condition else else_body
+    p = interpreter
+    return XInterpreter(body, parent=p).eval()
+
 class Xint(XDictionaryObject):
     def __init__(self, i):
         self._i = i
         self['add'] = Xint_add(None, self)
+        self['equals'] = Xint_equals(None, self)
         self['string'] = Xint_string(None, self)
         self['subtract'] = Xint_subtract(None, self)
     def __str__(self): return 'X<int:%d>' % self._i
@@ -238,6 +247,10 @@ def Xint_new(intepreter, string):
 @XFunction('int.add', converter=Xc_int)
 def Xint_add(intepreter, b, a=None):
     return Xint(a + b)
+
+@XFunction_takes_additional_arg('a', converter=Xc_int)
+@XFunction('int.equals', converter=Xc_int)
+def Xint_equals(intepreter, b, a=None): return Xc_Xbool(a == b)
 
 @XFunction('int.string', converter=Xc_int)
 def Xint_string(intepreter, i):
@@ -271,7 +284,8 @@ def stream_tokens_of_a_brace(tstream):
     s = stream_read_until_closing_brace(char_stream, 1)
     return stream_read_word_or_brace(stream_str(s))
 
-def tokens_forming_a_literal(l): return (' ', '(', '#', ' ', l, '', ')')
+def tokens_forming_a_literal(l):
+    return (' ', '(', '#', ' ', '(', l, '', ')', '', ')')
 
 def dotty_literals(stream):
     while True:
@@ -331,35 +345,39 @@ def curly_braced_functions_inside_a_brace(tstream):
     while not s or s[-1] not in '|}': s += tstream.next()
     #print 's', s
     s, c = s[:-1], s[-1]
-    if c == '}': # We have a {x y z}-like block, yield a literal
-        for z in tokens_forming_a_literal(s):
-            yield z
-    elif c == '|': # We have a {x y | z}-like block, yield function.of...
-        argnames = s.split()
-        #print 'argnames', argnames
+    argnames = s.split()
+    #print 'argnames', argnames
+    if c == '|': # We have a {x y | z}-like block, yield function.of...
         for argname in argnames:
             for z in (('(', 'xslang',) +
                       tokens_forming_a_literal('function') +
                       tokens_forming_a_literal('of') +
                       tokens_forming_a_literal(argname) +
                       (' ', '(', '#', ' ', '(')): yield z
-        contents = ''
+        s = ''
         while True:
-            contents += tstream.next()
-            if contents.count('}') - contents.count('{') == 1: break
-        contents = contents[:-1]
-        #print 'cont', contents
-        int_tstream = stream_read_word_or_brace(stream_str(contents))
-        for t in int_tstream:
-            #print 'it', t
-            if t == '}': break
-            elif t == '{':
-                for z in curly_braced_functions_inside_a_brace(int_tstream):
-                    yield z
-            else: yield t
-        #print ')))'
-        for argname in argnames:
-            for z in '', ')', '', ')', '', ')': yield z
+            s += tstream.next()
+            if s.count('}') - s.count('{') == 1: break
+        s = s[:-1]
+    elif c == '}': # We have a {x y z}-like block, yield a literal
+        for z in '(', '#', ' ', '(': yield z
+        s = s
+
+    #print 'cont "%s"' % s
+    int_tstream = stream_read_word_or_brace(stream_str(s))
+    for t in int_tstream:
+        #print 'it', t
+        if t == '}': break
+        elif t == '{':
+            for z in curly_braced_functions_inside_a_brace(int_tstream):
+                yield z
+        else: yield t
+
+    if c == '|':
+        for z in ('', ')') * (len(argnames) * 3): yield z
+    elif c == '}':
+        for z in ('', ')') * 2: yield z
+
 curly_braced_functions = composition(
     surround('{'), surround('}'), surround('|'), curly_braced_functions_
 )
@@ -378,11 +396,15 @@ def int_auto(stream):
                 continue
         yield t
 
+rich = composition(int_auto, curly_braced_functions, dotty_literals)
+def rich_expand(string):
+    return '$%s$' % ''.join(rich(stream_read_word_or_brace(stream_str(string))))
+
 TRANSFORMATIONS = {
     'dotty_literals': dotty_literals,
     'curly_braced_functions': curly_braced_functions,
     'int_auto': int_auto,
-    'rich': composition(int_auto, curly_braced_functions, dotty_literals),
+    'rich': rich,
 }
 
 @XFunction('syntax.enable')
@@ -411,6 +433,7 @@ xslang_rootobj = XDictionaryObject({
         'ident': Xident,
         'ignore': Xignore,
         'ternary': Xternary,
+        'if': Xif,
     }),
     'package': XDictionaryObject({}),
     'syntax': XDictionaryObject({
@@ -423,6 +446,7 @@ xslang_rootobj = XDictionaryObject({
         }),
         'int': XDictionaryObject({
             'add': Xint_add,
+            'equals': Xint_equals,
             'new': Xint_new,
             'string': Xint_string,
             'subtract': Xint_subtract,

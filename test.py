@@ -16,7 +16,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-from xslang import XInterpreter, XException
+from xslang import XInterpreter, XException, rich_expand
 import sys, os, traceback
 
 if __name__ == '__main__':
@@ -43,6 +43,7 @@ if __name__ == '__main__':
         if not str(e) == r:
             print
             print 'A test failed:      ', c
+            print 'Rich expansion      ', rich_expand(c)
             print 'Evaluation returned:', e
             print 'Expected:           ', r
             failed.append(testfile)
