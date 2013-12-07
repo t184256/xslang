@@ -106,6 +106,8 @@ def main():
         if s.startswith('+'):
             syntax_prefix += '(xslang (# syntax) (# enable) (# %s) \n' % s[1:]
             syntax_postfix += ')'
+    for s in argv:
+        if s.startswith('+'):
             argv.remove(s)
 
     print syntax_prefix
