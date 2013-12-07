@@ -341,10 +341,23 @@ curly_braced_functions = composition(
     surround('{'), surround('}'), surround('|'), curly_braced_functions_
 )
 
+def int_auto(stream):
+    while True:
+        t = stream.next()
+        if t.isdigit():
+            for z in (('(', 'xslang ') +
+                      tokens_forming_a_literal('type') +
+                      tokens_forming_a_literal('int') +
+                      tokens_forming_a_literal('new') +
+                      tokens_forming_a_literal(t) +
+                      (')',)): yield z
+        else: yield t
+
 TRANSFORMATIONS = {
     'dotty_literals': dotty_literals,
     'curly_braced_functions': curly_braced_functions,
-    'rich': composition(curly_braced_functions, dotty_literals),
+    'int_auto': int_auto,
+    'rich': composition(curly_braced_functions, dotty_literals, int_auto),
 }
 
 @XFunction('syntax.enable')
