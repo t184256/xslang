@@ -1,3 +1,3 @@
 (xslang)
 ###
-XDICT<context,function,operator,package,syntax,types>
+XDICT<context,function,operator,package,syntax,type>

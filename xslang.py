@@ -23,13 +23,10 @@ class XObject(object):
 
 class XException(Exception): pass
 
-## TODO: implement primitive types in xslang
-#class XBoolean(XObject):
-#    @staticmethod
-#    def convert(obj): return XTrue() if obj else XFalse()
-#class XTrue(XBoolean): pass
-#class XFalse(XBoolean): pass
-class XNone(XObject): pass
+class XBool(XObject): pass
+class Xtrue(XBool): pass
+class Xfalse(XBool): pass
+class Xnone(XObject): pass
 
 ### Streaming ###
 
@@ -154,6 +151,11 @@ def Xc_str(s):
     if isinstance(s, Xstring): return s.str()
     raise XException('Not an Xstring: ' + str(s))
 
+def Xc_bool(s):
+    if isinstance(s, Xtrue): return True
+    if isinstance(s, Xfalse): return False
+    raise XException('Not an Xbool: ' + str(s))
+
 ### Standard library ###
 
 class XStringLiteralMutator(XObject):
@@ -200,6 +202,12 @@ def Xget(interpreter, varname):
 def XfunctionOf(interpreter, arg, varname=None, body=None):
     interpreter.context[varname] = arg
     return XInterpreter(body, parent=interpreter).eval()
+
+@XFunction_takes_additional_arg('condition', converter=Xc_bool)
+@XFunction_takes_additional_arg('if_val')
+@XFunction('ternary')
+def Xternary(interpreter, else_val, if_val, condition=None):
+    return if_val if condition else else_val
 
 ### Syntax transformations ###
 
@@ -341,12 +349,19 @@ xslang_rootobj = XDictionaryObject({
     'operator': XDictionaryObject({
         'ident': Xident,
         'ignore': Xignore,
+        'ternary': Xternary,
     }),
     'package': XDictionaryObject({}),
     'syntax': XDictionaryObject({
             'enable': XsyntaxEnable,
     }),
-    'types': XDictionaryObject({}),
+    'type': XDictionaryObject({
+        'none': Xnone,
+        'bool': XDictionaryObject({
+            'true': Xtrue(),
+            'false': Xfalse(),
+        }),
+    }),
 })
 
 if __name__ == '__main__': print XInterpreter(raw_input()).eval()
