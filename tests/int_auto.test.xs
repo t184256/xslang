@@ -1,6 +1,6 @@
 (xslang (# syntax) (# enable) (# rich)
  xslang.context.set .int (xslang.type.int)
- int.add 2 ((3).add 4) .string
+ int.subtract ((3).add 4) -2 .string
 )
 ###
 X<'9'>

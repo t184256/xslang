@@ -226,6 +226,7 @@ class Xint(XDictionaryObject):
         self._i = i
         self['add'] = Xint_add(None, self)
         self['string'] = Xint_string(None, self)
+        self['subtract'] = Xint_subtract(None, self)
     def __str__(self): return 'X<int:%d>' % self._i
     def int(self): return self._i
 
@@ -241,6 +242,10 @@ def Xint_add(intepreter, b, a=None):
 @XFunction('int.string', converter=Xc_int)
 def Xint_string(intepreter, i):
     return Xstring(str(i))
+
+@XFunction_takes_additional_arg('a', converter=Xc_int)
+@XFunction('int.subtract', converter=Xc_int)
+def Xint_subtract(intepreter, b, a=None): return Xint(a - b)
 
 @XFunction_takes_additional_arg('a', converter=Xc_str)
 @XFunction('string.concatenate', converter=Xc_str)
@@ -359,17 +364,19 @@ curly_braced_functions = composition(
     surround('{'), surround('}'), surround('|'), curly_braced_functions_
 )
 
+def tokens_forming_an_int(int_str):
+    return (('(', 'xslang ') + tokens_forming_a_literal('type') +
+            tokens_forming_a_literal('int') + tokens_forming_a_literal('new') +
+            tokens_forming_a_literal(int_str) + (')',))
+
 def int_auto(stream):
     while True:
         t = stream.next()
-        if t.isdigit():
-            for z in (('(', 'xslang ') +
-                      tokens_forming_a_literal('type') +
-                      tokens_forming_a_literal('int') +
-                      tokens_forming_a_literal('new') +
-                      tokens_forming_a_literal(t) +
-                      (')',)): yield z
-        else: yield t
+        if t:
+            if t.isdigit() or (t[0] == '-' and t[1:].isdigit()):
+                for z in tokens_forming_an_int(t): yield z
+                continue
+        yield t
 
 TRANSFORMATIONS = {
     'dotty_literals': dotty_literals,
@@ -415,9 +422,10 @@ xslang_rootobj = XDictionaryObject({
             'false': Xfalse(),
         }),
         'int': XDictionaryObject({
-            'new': Xint_new,
             'add': Xint_add,
+            'new': Xint_new,
             'string': Xint_string,
+            'subtract': Xint_subtract,
         }),
         'none': Xnone,
         'string': XDictionaryObject({
