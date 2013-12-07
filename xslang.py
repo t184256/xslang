@@ -218,6 +218,7 @@ class Xint(XDictionaryObject):
     def __init__(self, i):
         self._i = i
         self['add'] = Xint_add(None, self)
+        self['string'] = Xint_string(None, self)
     def __str__(self): return 'X<int:%d>' % self._i
     def int(self): return self._i
 
@@ -231,6 +232,11 @@ def Xint_new(intepreter, string):
 def Xint_add(intepreter, b, a=None):
     b = Xc_int(b)
     return Xint(a + b)
+
+@XFunction('int.string')
+def Xint_string(intepreter, i):
+    i = Xc_int(i)
+    return Xstring(str(i))
 
 ### Syntax transformations ###
 
@@ -395,6 +401,7 @@ xslang_rootobj = XDictionaryObject({
         'int': XDictionaryObject({
             'new': Xint_new,
             'add': Xint_add,
+            'string': Xint_string,
         }),
         'none': Xnone,
         'bool': XDictionaryObject({
