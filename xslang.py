@@ -252,7 +252,7 @@ def surround(what, with_=' '):
                 if t: yield t
     return surr
 
-def transformation_composition(ti, *ts):
+def composition(ti, *ts):
     def composed(stream):
         f = ti(stream)
         for t in ts: f = t(f)
@@ -306,13 +306,14 @@ def curly_braced_functions_inside_a_brace(tstream):
         #print ')))'
         for argname in argnames:
             for z in '', ')', '', ')', '', ')': yield z
-curly_braced_functions = transformation_composition(
+curly_braced_functions = composition(
     surround('{'), surround('}'), surround('|'), curly_braced_functions_
 )
 
 TRANSFORMATIONS = {
     'dotty_literals': dotty_literals,
     'curly_braced_functions': curly_braced_functions,
+    'rich': composition(curly_braced_functions, dotty_literals),
 }
 
 @XFunction('syntax.enable')
