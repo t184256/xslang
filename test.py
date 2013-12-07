@@ -28,7 +28,7 @@ if __name__ == '__main__':
         s = file(testfilepath).read()
         if not s.startswith('('):
             disabled.append(testfile)
-            sys.stdout.write('_')
+            sys.stdout.write('_'); sys.stdout.flush()
             continue
         c, r = s.split('###', 1)
         c, r = c.strip(), r.strip()
@@ -47,7 +47,7 @@ if __name__ == '__main__':
             print 'Expected:           ', r
             failed.append(testfile)
         if not failed:
-            sys.stdout.write('+')
+            sys.stdout.write('+'); sys.stdout.flush()
     print
     for f in disabled:
         print 'TEST DISABLED:', f
