@@ -109,6 +109,7 @@ class XInterpreter(object):
                 else: raise XException('No ' + n + ' in current context!')
             if f is None: f = n
             else: f = f(self, n)
+            #print f
             assert isinstance(f, XObject)
             while '__mutate__' in dir(f):
                 self.currently_mutating = f
@@ -151,10 +152,14 @@ def Xc_str(s):
     if isinstance(s, Xstring): return s.str()
     raise XException('Not an Xstring: ' + str(s))
 
-def Xc_bool(s):
-    if isinstance(s, Xtrue): return True
-    if isinstance(s, Xfalse): return False
-    raise XException('Not an Xbool: ' + str(s))
+def Xc_int(i):
+    if isinstance(i, Xint): return i.int()
+    raise XException('Not an Xint: ' + str(i))
+
+def Xc_bool(b):
+    if isinstance(b, Xtrue): return True
+    if isinstance(b, Xfalse): return False
+    raise XException('Not an Xbool: ' + str(b))
 
 ### Standard library ###
 
@@ -208,6 +213,24 @@ def XfunctionOf(interpreter, arg, varname=None, body=None):
 @XFunction('ternary')
 def Xternary(interpreter, else_val, if_val, condition=None):
     return if_val if condition else else_val
+
+class Xint(XDictionaryObject):
+    def __init__(self, i): self._i = i
+    def __str__(self): return 'X<int:%d>' % self._i
+    def int(self): return self._i
+
+@XFunction('int.new')
+def Xint_new(intepreter, string):
+    string = Xc_str(string)
+    return Xint(int(string))
+Xint.new = Xint_new
+
+@XFunction('int.add')
+@XFunction_takes_additional_arg('a', converter=Xc_int)
+def Xint_add(intepreter, b, a=None):
+    b = Xc_int(b)
+    return Xint(a + b)
+Xint.add = Xint_add
 
 ### Syntax transformations ###
 
@@ -356,6 +379,10 @@ xslang_rootobj = XDictionaryObject({
             'enable': XsyntaxEnable,
     }),
     'type': XDictionaryObject({
+        'int': XDictionaryObject({
+            'new': Xint_new,
+            'add': Xint_add,
+        }),
         'none': Xnone,
         'bool': XDictionaryObject({
             'true': Xtrue(),
