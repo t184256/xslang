@@ -57,6 +57,7 @@ def stream_read_word_or_brace(stream):
     while True:
         try:
             s += stream.next()
+            #print 's "%s"' % s
             if s:
                 if s[-1] == '(' or s[-1].isspace():
                     if s[:-1]: yield s[:-1]
@@ -210,20 +211,22 @@ def stream_detokenize_stream(tstream):
             c, s = s[0], s[1:]
             yield c
 
-def stream_token_of_a_brace(tstream):
+def stream_tokens_of_a_brace(tstream):
     char_stream = stream_detokenize_stream(tstream)
     assert(char_stream.next() == '(')
     s = stream_read_until_closing_brace(char_stream, 1)
     return stream_read_word_or_brace(stream_str(s))
 
+def tokens_forming_a_literal(l): return (' ', '(', '#', ' ', l, '', ')')
+
 def dotty_literals(stream):
     while True:
         t = stream.next()
+        #print 't', t
         if not '.' in t: yield t; continue
         if t == '.':
-            for z in '(# (': yield z
-            for t in stream_token_of_a_brace(stream): yield t
-            for z in ('', ')', '', ')'): yield z
+            inside = stream_tokens_of_a_brace(stream)
+            for z in tokens_forming_a_literal('(' + inside + ')'): yield z
             continue
         if '.' in t and not t.startswith('.'):
             p, t = t.split('.', 1)
@@ -232,18 +235,92 @@ def dotty_literals(stream):
         while t.startswith('.') and '.' in t[1:]:
             p, t = t[1:].split('.', 1)
             t = '.' + t
-            for z in (' ', '(', '#', ' ', p, '', ')'): yield z
-        for z in (' ', '(', '#', ' ', t[1:], '', ')'): yield z
+            for z in tokens_forming_a_literal(p): yield z
+        for z in tokens_forming_a_literal(t[1:]): yield z
+
+def surround(what, with_=' '):
+    def surr(tstream):
+        for t in tstream:
+            if not what in t: yield t
+            else:
+                l = []
+                while '{' in t:
+                    a, t = t.split('{', 1)
+                    l += [a, with_, what, with_]
+                for z in l: yield z
+                if t: yield t
+    return surr
+
+def transformation_composition(ti, *ts):
+    def composed(stream):
+        f = ti(stream)
+        for t in ts: f = t(f)
+        return f
+    return composed
+
+def curly_braced_functions(tstream):
+    while True:
+        t = tstream.next()
+        #print 't "%s"' % t
+        if t != '{': yield t
+        else:
+            #print '{!!!'
+            #ts = list(curly_braced_functions_inside_a_brace(tstream))
+            #print 'ts', ''.join(ts)
+            #for z in ts: yield z
+            for z in curly_braced_functions_inside_a_brace(tstream): yield z
+        #print 'DONE'
+def curly_braced_functions_inside_a_brace(tstream):
+    #print 'INSIDE'
+    s = ''
+    while not s or s[-1] not in '|}': s += tstream.next()
+    #print 's', s
+    s, c = s[:-1], s[-1]
+    if c == '}': # We have a {x y z}-like block, yield a literal
+        for z in tokens_forming_a_literal(s):
+            yield z
+    elif c == '|': # We have a {x y | z}-like block, yield function.of...
+        argnames = s.split()
+        #print 'argnames', argnames
+        for argname in argnames:
+            for z in (('(', 'xslang',) +
+                      tokens_forming_a_literal('function') +
+                      tokens_forming_a_literal('of') +
+                      tokens_forming_a_literal(argname) +
+                      (' ', '(', '#', ' ', '(')): yield z
+        contents = ''
+        while not contents or contents[-1] != '}':
+            contents += tstream.next()
+        contents = contents[:-1]
+        #print 'cont', contents
+        int_tstream = stream_read_word_or_brace(stream_str(contents))
+        for t in int_tstream:
+            #print 'it', t
+            if t == '}': break
+            elif t == '{':
+                for z in curly_braced_functions_inside_a_brace(int_tstream):
+                    yield z
+            else: yield t
+        #print ')))'
+        for argname in argnames:
+            for z in '', ')', '', ')', '', ')': yield z
 
 TRANSFORMATIONS = {
     'dotty_literals': dotty_literals,
+    'curly_braced_functions': curly_braced_functions,
+    #'curly_braced_functions': transformation_composition(
+    #    surround('{'), surround('}'), surround('|'), curly_braced_functions
+    #),
 }
 
-@XFunction('function.of')
+@XFunction('syntax.enable')
 def XsyntaxEnable(interpreter, transformation_name):
     transformation_name = Xc_str(transformation_name)
     transform = TRANSFORMATIONS[transformation_name]
     interpreter.token_stream = transform(interpreter.token_stream)
+#    print 'transformation', transform
+#    print 'transformed', interpreter.token_stream
+#    raise Exception(list(interpreter.token_stream))
 #    raise Exception(''.join(interpreter.token_stream))
 #    stream = transform(interpreter.stream)
 #    return XInterpreter(stream, parent=interpreter).eval()
