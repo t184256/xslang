@@ -161,6 +161,10 @@ def Xc_bool(b):
     if isinstance(b, Xfalse): return False
     raise XException('Not an Xbool: ' + str(b))
 
+def Xc_Xbool(b):
+    return Xtrue() if b else Xfalse()
+    raise XException('Not an bool: ' + str(b))
+
 ### Standard library ###
 
 class XStringLiteralMutator(XObject):
@@ -186,7 +190,11 @@ class XDictionaryObject(XObject, dict):
     def __str__(self): return 'XDICT<' + ','.join(sorted(self.keys())) + '>'
 
 class Xstring(XDictionaryObject):
-    def __init__(self, s): self._s = s
+    def __init__(self, s):
+        self._s = s
+        self['concatenate'] = Xstring_concatenate(None, self)
+        self['equals'] = Xstring_equals(None, self)
+        self['set'] = Xset(None, self)
     def __str__(self): return 'X<\'' + self._s + '\'>'
     def str(self): return self._s
 
@@ -233,6 +241,14 @@ def Xint_add(intepreter, b, a=None):
 @XFunction('int.string', converter=Xc_int)
 def Xint_string(intepreter, i):
     return Xstring(str(i))
+
+@XFunction_takes_additional_arg('a', converter=Xc_str)
+@XFunction('string.concatenate', converter=Xc_str)
+def Xstring_concatenate(intepreter, b, a=None): return Xstring(a + b)
+
+@XFunction_takes_additional_arg('a', converter=Xc_str)
+@XFunction('string.equals', converter=Xc_str)
+def Xstring_equals(intepreter, b, a=None): return Xc_Xbool(a == b)
 
 ### Syntax transformations ###
 
@@ -394,15 +410,20 @@ xslang_rootobj = XDictionaryObject({
             'enable': XsyntaxEnable,
     }),
     'type': XDictionaryObject({
+        'bool': XDictionaryObject({
+            'true': Xtrue(),
+            'false': Xfalse(),
+        }),
         'int': XDictionaryObject({
             'new': Xint_new,
             'add': Xint_add,
             'string': Xint_string,
         }),
         'none': Xnone,
-        'bool': XDictionaryObject({
-            'true': Xtrue(),
-            'false': Xfalse(),
+        'string': XDictionaryObject({
+            'concatenate': Xstring_concatenate,
+            'equals': Xstring_equals,
+            'literal': XStringLiteralMutator(),
         }),
     }),
 })
