@@ -31,6 +31,7 @@ class Xnone(XObject): pass
 ### Streaming ###
 
 def stream_str(string):
+    if not string: return
     while True:
         c, string = string[0], string[1:]
         yield c
@@ -156,6 +157,10 @@ def Xc_int(i):
     if isinstance(i, Xint): return i.int()
     raise XException('Not an Xint: ' + str(i))
 
+def Xc_tuple(t):
+    if isinstance(t, Xtuple): return t.tuple()
+    raise XException('Not an Xtuple: ' + str(t))
+
 def Xc_bool(b):
     if isinstance(b, Xtrue): return True
     if isinstance(b, Xfalse): return False
@@ -267,6 +272,38 @@ def Xstring_concatenate(intepreter, b, a=None): return Xstring(a + b)
 @XFunction_takes_additional_arg('a', converter=Xc_str)
 @XFunction('string.equals', converter=Xc_str)
 def Xstring_equals(intepreter, b, a=None): return Xc_Xbool(a == b)
+
+class Xtuple(XDictionaryObject):
+    def __init__(self, t):
+        self._t = t
+        self['add'] = Xtuple_add(None, self)
+        self['get'] = Xtuple_get(None, self)
+        self['equals'] = Xtuple_equals(None, self)
+    def __str__(self): return 'X<tuple:%s>' % ','.join(str(x) for x in self._t)
+    def tuple(self): return self._t
+
+@XFunction_takes_additional_arg('t', converter=Xc_tuple)
+@XFunction('tuple.add')
+def Xtuple_add(intepreter, e, t=None): return Xtuple(t + (e,))
+
+@XFunction_takes_additional_arg('t', converter=Xc_tuple)
+@XFunction('tuple.get', converter=Xc_int)
+def Xtuple_get(intepreter, i, t=None):
+    if not (i >= 0 and i < len(t)):
+        raise XException('Out of bounds: %d/%d' % (i, len(t)))
+    return t[i]
+
+@XFunction_takes_additional_arg('t1', converter=Xc_tuple)
+@XFunction('tuple.equals', converter=Xc_tuple)
+def Xtuple_equals(intepreter, t2, t1=None):
+    def compare(e1, e2):
+        if e1 == e2: return True
+        if type(e1) != type(e2): return False
+        if not (isinstance(e1, XDictionaryObject) and
+                isinstance(e2, XDictionaryObject)): return False
+        if not 'equals' in e1: return False
+        return e1['equals'](None, e2)
+    return Xc_Xbool(all(compare(e1, e2) for e1, e2 in zip(t1, t2)))
 
 ### Syntax transformations ###
 
@@ -456,6 +493,12 @@ xslang_rootobj = XDictionaryObject({
             'concatenate': Xstring_concatenate,
             'equals': Xstring_equals,
             'literal': XStringLiteralMutator(),
+        }),
+        'tuple': XDictionaryObject({
+            'add': Xtuple_add,
+            'empty': Xtuple(tuple()),
+            'equals': Xtuple_equals,
+            'get': Xtuple_get,
         }),
     }),
 })
