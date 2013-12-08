@@ -170,6 +170,10 @@ def Xc_Xbool(b):
     return Xtrue() if b else Xfalse()
     raise XException('Not an bool: ' + str(b))
 
+def Xc_Xint(i):
+    if not isinstance(i, int): raise XException('Not an int: ' + str(i))
+    return Xint(i)
+
 ### Standard library ###
 
 class XStringLiteralMutator(XObject):
@@ -199,6 +203,7 @@ class Xstring(XDictionaryObject):
         self._s = s
         self['concatenate'] = Xstring_concatenate(None, self)
         self['equals'] = Xstring_equals(None, self)
+        self['length'] = XStringLengthLazyMutator(self)
         self['set'] = Xset(None, self)
     def __str__(self): return 'X<\'' + self._s + '\'>'
     def str(self): return self._s
@@ -273,12 +278,21 @@ def Xstring_concatenate(intepreter, b, a=None): return Xstring(a + b)
 @XFunction('string.equals', converter=Xc_str)
 def Xstring_equals(intepreter, b, a=None): return Xc_Xbool(a == b)
 
+@XFunction('string.length', converter=Xc_str)
+def Xstring_length(intepreter, s): return Xc_Xint(len(s))
+
+class XStringLengthLazyMutator(XObject):
+    def __init__(self, Xstr): self._Xstr = Xstr
+    def __mutate__(self, interpreter):
+        return Xint(self._xstr)
+
 class Xtuple(XDictionaryObject):
     def __init__(self, t):
         self._t = t
         self['add'] = Xtuple_add(None, self)
         self['get'] = Xtuple_get(None, self)
         self['equals'] = Xtuple_equals(None, self)
+        self['length'] = Xtuple_length(None, self)
     def __str__(self): return 'X<tuple:%s>' % ','.join(str(x) for x in self._t)
     def tuple(self): return self._t
 
@@ -304,6 +318,9 @@ def Xtuple_equals(intepreter, t2, t1=None):
         if not 'equals' in e1: return False
         return e1['equals'](None, e2)
     return Xc_Xbool(all(compare(e1, e2) for e1, e2 in zip(t1, t2)))
+
+@XFunction('tuple.length', converter=Xc_tuple)
+def Xtuple_length(intepreter, t): return Xc_Xint(len(t))
 
 ### Syntax transformations ###
 
@@ -492,6 +509,7 @@ xslang_rootobj = XDictionaryObject({
         'string': XDictionaryObject({
             'concatenate': Xstring_concatenate,
             'equals': Xstring_equals,
+            'length': Xstring_length,
             'literal': XStringLiteralMutator(),
         }),
         'tuple': XDictionaryObject({
@@ -499,6 +517,7 @@ xslang_rootobj = XDictionaryObject({
             'empty': Xtuple(tuple()),
             'equals': Xtuple_equals,
             'get': Xtuple_get,
+            'length': Xtuple_length,
         }),
     }),
 })
