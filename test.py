@@ -17,12 +17,14 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 from xslang import XInterpreter, XException, rich_expand
-import sys, os, traceback
+import os, sys, time, traceback
 
 if __name__ == '__main__':
     TESTFILES = os.listdir('tests')
     failed, disabled = [], []
+    longest, longest_t = '', 0
     sys.stdout.write('%d: ' % len(TESTFILES))
+    gstart = time.time()
     for i, testfile in enumerate(TESTFILES):
         testfilepath = os.path.join('tests', testfile)
         s = file(testfilepath).read()
@@ -32,6 +34,7 @@ if __name__ == '__main__':
             continue
         c, r = s.split('###', 1)
         c, r = c.strip(), r.strip()
+        tstart = time.time()
         try:
             e = XInterpreter(c).eval()
         except Exception, ex:
@@ -40,6 +43,8 @@ if __name__ == '__main__':
             print c
             print traceback.format_exc(ex)
             e = 'XException(%s)' % ex if isinstance(ex, XException) else str(ex)
+        duration = time.time() - tstart
+        if duration > longest_t: longest, longest_t = testfile, duration
         if not str(e) == r:
             print
             print 'A test failed:      ', c
@@ -50,12 +55,17 @@ if __name__ == '__main__':
         if not failed:
             sys.stdout.write('+'); sys.stdout.flush()
     print
+    gduration = time.time() - gstart
     for f in disabled:
         print 'TEST DISABLED:', f
     for f in failed:
         print 'TEST FAILED:', f
     if not failed:
         print 'All tests passed OK'
+        print 'the longest being %s with %.3f sec' % (longest, longest_t)
+        print 'Total execution time = %.3f sec,' % gduration,
+        print 'average time per test = %.3f sec' % \
+                (gduration / (len(TESTFILES) - len(disabled)))
         sys.exit(0)
     sys.exit(1)
 
