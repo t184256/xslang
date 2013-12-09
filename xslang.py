@@ -148,9 +148,10 @@ def XFunction(name=None, converter=None):
 def XFunction_takes_additional_arg(arg_name, converter=None):
     def transform(func):
         @XFunction('%s %s=(???)' % (str(func), arg_name))
-        def XArgInjector(interpreter, arg, **kwa_):
+        def XArgInjector(interpreter, arg_, **kwa_):
+            arg = arg_
             if not converter is None: arg = converter(arg)
-            @XFunction('%s %s=(%s)' % (func, arg_name, arg))
+            @XFunction('%s %s=(%s)' % (func, arg_name, arg_))
             def ProxyFunc(*a, **kwa):
                 kwa.update(kwa_)
                 kwa[arg_name] = arg

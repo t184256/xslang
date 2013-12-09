@@ -25,7 +25,6 @@ ugly_objectdesc = re.compile(r'<(\S*) object at .*>')
 
 class BackspaceException(Exception): pass
 class ControlWException(Exception): pass
-class EnterException(Exception): pass
 class TabException(Exception): pass
 
 # TODO: compact
@@ -42,6 +41,17 @@ except ImportError:
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
         return ch
+try:
+    from colorama import init, Fore, Back, Style
+    def colored(text, color='white', bg='black', style='normal'):
+        color, bg = color.upper(), bg.upper()
+        style = style.upper()
+        return str(getattr(Fore, color) + getattr(Back, bg) +
+                  getattr(Style, style) + text +
+                  Fore.RESET + Back.RESET + Style.RESET_ALL)
+
+except:
+    def colored(text, *a, **kwa): return text
 
 # TODO: rewrite as a generator
 class Interactive(object):
@@ -75,7 +85,7 @@ class Interactive(object):
         c = self.subsource()
         if ord(c) == 9: raise TabException()
         if ord(c) == 23: raise ControlWException()
-        if ord(c) == 13: raise EnterException()
+        if ord(c) == 13: c = '\n'
         if ord(c) == 27: sys.exit(0)
         if ord(c) == 127: raise BackspaceException()
         self.h += c
@@ -92,8 +102,14 @@ def printstate(b, shorten_to=80, stars=1):
             printstate(f, shorten_to, stars=stars+1)
         s = str(f)
         if not s: s = '...'
+        if f == b.currently_mutating and isinstance(b, XInterpreter): continue
         symbol = '*' if f != b.currently_mutating else '.'
-        print symbol * stars, shorten(s, shorten_to - stars - 1)
+        highlighted = f == b.previous[-1]
+        line_len = shorten_to - stars - 1 - (3 if highlighted else 0)
+        line = symbol * stars + ' ' + shorten(s, line_len)
+        if highlighted:
+            line += (' ' * (shorten_to - len(line) - 3) + ' <-')
+        print colored(line, style='bright') if highlighted else line
 #    print '.' * stars, b.currently_mutating
 
 INITIAL_S = '('
@@ -143,9 +159,6 @@ def main():
                 s += filtered[0][len(prefix):] + ' '
             else:
                 display_error = ': ' + ' '.join(sorted(choices))
-        except EnterException, e:
-            display_error = None
-            s = INITIAL_S
         except XException, e:
             display_error = 'X ' + str(e)
             s = i.h[:-1]
