@@ -19,18 +19,43 @@
 from xslang import XInterpreter, XException, expand
 import os, sys, time, traceback
 
+class DynamicLine(object):
+    def __init__(self, s='', prefix=''):
+        self.s = ''
+        self.prefix = prefix
+        for c in prefix: sys.stdout.write(c)
+        sys.stdout.flush()
+    def prefix_add(self, p, redraw_postfix=True):
+        self.prefix += p
+        for c in self.s: sys.stdout.write('\b')
+        for c in self.s: sys.stdout.write(' ')
+        for c in self.s: sys.stdout.write('\b')
+        for c in p: sys.stdout.write(c)
+        if not redraw_postfix: self.s = ''
+        for c in self.s: sys.stdout.write(c)
+        sys.stdout.flush()
+    def print_postfix(self, line):
+        for c in self.s: sys.stdout.write('\b')
+        for c in self.s: sys.stdout.write(' ')
+        for c in self.s: sys.stdout.write('\b')
+        for c in line: sys.stdout.write(c)
+        self.s = line
+        sys.stdout.flush()
+
 if __name__ == '__main__':
     TESTFILES = os.listdir('tests')
     failed, disabled = [], []
     longest, longest_t = '', 0
-    sys.stdout.write('%d: ' % len(TESTFILES))
     gstart = time.time()
+    dl = DynamicLine()
+    dl.prefix_add('%2d: |' % len(TESTFILES))
     for i, testfile in enumerate(TESTFILES):
+        dl.print_postfix('| '.rjust(len(TESTFILES) - i + 2) + testfile)
         testfilepath = os.path.join('tests', testfile)
         s = file(testfilepath).read()
         if not s.startswith('('):
+            dl.prefix_add('_')
             disabled.append(testfile)
-            sys.stdout.write('_'); sys.stdout.flush()
             continue
         c, r = s.split('###', 1)
         c, r = c.strip(), r.strip()
@@ -53,8 +78,8 @@ if __name__ == '__main__':
             print 'Expected:           ', r
             failed.append(testfile)
         if not failed:
-            sys.stdout.write('+'); sys.stdout.flush()
-    print
+            dl.prefix_add('+', redraw_postfix=False)
+    print '|'
     gduration = time.time() - gstart
     for f in disabled:
         print 'TEST DISABLED:', f
