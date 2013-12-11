@@ -160,6 +160,30 @@ def XFunction_takes_additional_arg(arg_name, converter=None):
         return XArgInjector
     return transform
 
+def XFunction_python(s):
+    type_, r = s.split(' ', 1); name, r = s.split('(', 1)
+    sign_in, body = r.split(')', 1); params = sign_in.split(' ')
+    pns = [p if not ':' in p else p.split(':', 1)[0] for p in params]
+    s = ''
+    assert len(params) > 1
+    for param in params[:-1]:
+        if ':'in param:
+            pn, pt = param.split(':')
+            s += "XFunction_takes_additional_arg('%s', converter=%s)(\n" % \
+                    (pn, 'Xc_' + pt)
+        else:
+            s += "XFunction_takes_additional_arg('%s')(\n " % pn
+    if ':'in params[-1]:
+        pn, pt = params[0].split(':')
+        s += "XFunction('%s', converter=%s)(\n" % (name, 'Xc_' + pt)
+    else:
+        s += "XFunction('%s')(\n" % name
+    s += "lambda i, %s" % pns[-1]
+    s += ''.join(', %s=None' % pn for pn in pns[:-1])
+    s += ': ' + body + ')' * len(params)
+    #print s
+    return eval(s)
+
 def Xc_str(s):
     if isinstance(s, Xstring): return s.str()
     raise XException('Not an Xstring: ' + str(s))
@@ -287,9 +311,10 @@ def Xint_to(intepreter, b, a=None):
 @XFunction('string.concatenate', converter=Xc_str)
 def Xstring_concatenate(intepreter, b, a=None): return Xstring(a + b)
 
-@XFunction_takes_additional_arg('a', converter=Xc_str)
-@XFunction('string.equals', converter=Xc_str)
-def Xstring_equals(intepreter, b, a=None): return Xc_Xbool(a == b)
+#@XFunction_takes_additional_arg('a', converter=Xc_str)
+#@XFunction('string.equals', converter=Xc_str)
+#def Xstring_equals(intepreter, b, a=None): return Xc_Xbool(a == b)
+Xstring_equals = XFunction_python('Xbool string.equals(a:str b:str) a == b')
 
 @XFunction_takes_additional_arg('s', converter=Xc_str)
 @XFunction('string.join', converter=Xc_tuple)
