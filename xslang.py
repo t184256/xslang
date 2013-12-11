@@ -161,27 +161,21 @@ def XFunction_takes_additional_arg(arg_name, converter=None):
     return transform
 
 def XFunction_python(s):
+    if not ' ' in s.split('(')[0]: s = 'any ' + s # Add 'any' return type
     type_, r = s.split(' ', 1); name, r = s.split('(', 1)
     sign_in, body = r.split(')', 1); params = sign_in.split(' ')
-    pns = [p if not ':' in p else p.split(':', 1)[0] for p in params]
+    params = [(p, 'any') if not ':' in p else p.split(':', 1) for p in params]
     s = ''
     assert len(params) > 1
-    for param in params[:-1]:
-        if ':'in param:
-            pn, pt = param.split(':')
-            s += "XFunction_takes_additional_arg('%s', converter=%s)(\n" % \
-                    (pn, 'Xc_' + pt)
-        else:
-            s += "XFunction_takes_additional_arg('%s')(\n " % pn
-    if ':'in params[-1]:
-        pn, pt = params[0].split(':')
-        s += "XFunction('%s', converter=%s)(\n" % (name, 'Xc_' + pt)
-    else:
-        s += "XFunction('%s')(\n" % name
-    s += "lambda i, %s" % pns[-1]
-    s += ''.join(', %s=None' % pn for pn in pns[:-1])
-    s += ': ' + body + ')' * len(params)
-    #print s
+    for pn, pt in params[:-1]:
+        s += "XFunction_takes_additional_arg('%s', converter=%s)(\n" % \
+                (pn, 'Xc_' + pt)
+    pn, pt = params[-1]
+    s += "XFunction('%s', converter=%s)(\n" % (name, 'Xc_' + pt)
+    s += "lambda interpreter, %s" % params[-1][0]
+    s += ''.join(', %s=None' % p[0] for p in params[:-1])
+    s += ': Xc_%s( %s )' % (type_, body) +  ')' * len(params)
+    print s
     return eval(s)
 
 def Xc_str(s):
@@ -201,13 +195,23 @@ def Xc_bool(b):
     if isinstance(b, Xfalse): return False
     raise XException('Not an Xbool: ' + str(b))
 
-def Xc_Xbool(b):
-    return Xtrue() if b else Xfalse()
-    raise XException('Not an bool: ' + str(b))
+def Xc_Xstring(s):
+    if not isinstance(s, str): raise XException('Not an str: ' + str(s))
+    return Xstring(s)
 
 def Xc_Xint(i):
     if not isinstance(i, int): raise XException('Not an int: ' + str(i))
     return Xint(i)
+
+def Xc_Xtuple(i):
+    if not isinstance(t, tuple): raise XException('Not a tuple: ' + str(t))
+    return Xtuple(i)
+
+def Xc_Xbool(b):
+    return Xtrue() if b else Xfalse()
+    raise XException('Not an bool: ' + str(b))
+
+Xc_any = lambda x: x
 
 ### Standard library ###
 
@@ -256,11 +260,13 @@ def XfunctionOf(interpreter, arg, varname=None, body=None):
     interpreter.context[varname] = arg
     return XInterpreter(body, parent=interpreter).eval()
 
-@XFunction_takes_additional_arg('condition', converter=Xc_bool)
-@XFunction_takes_additional_arg('if_val')
-@XFunction('ternary')
-def Xternary(interpreter, else_val, if_val, condition=None):
-    return if_val if condition else else_val
+#@XFunction_takes_additional_arg('condition', converter=Xc_bool)
+#@XFunction_takes_additional_arg('if_val')
+#@XFunction('ternary')
+#def Xternary(interpreter, else_val, if_val, condition=None):
+#    return if_val if condition else else_val
+Xternary = XFunction_python(
+    'operator.ternary(cond:bool if_v else_v) if_v if cond else else_v')
 
 @XFunction_takes_additional_arg('condition', converter=Xc_bool)
 @XFunction_takes_additional_arg('if_body', converter=Xc_str)
@@ -319,7 +325,9 @@ Xstring_equals = XFunction_python('Xbool string.equals(a:str b:str) a == b')
 @XFunction_takes_additional_arg('s', converter=Xc_str)
 @XFunction('string.join', converter=Xc_tuple)
 def Xstring_join(intepreter, t, s=None):
-    return Xstring(s.join(Xc_str(x) for x in t))
+    return Xc_Xstring(s.join(Xc_str(x) for x in t))
+Xstring_join = XFunction_python(
+    'Xstring string.join(s:str t:tuple) s.join(Xc_str(x) for x in t)')
 
 @XFunction('string.length', converter=Xc_str)
 def Xstring_length(intepreter, s): return Xc_Xint(len(s))
