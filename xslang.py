@@ -209,6 +209,7 @@ class Xstring(XDictionaryObject):
         self._s = s
         self['concatenate'] = Xstring_concatenate(None, self)
         self['equals'] = Xstring_equals(None, self)
+        self['join'] = Xstring_join(None, self)
         self['length'] = XStringLengthLazyMutator(self)
         self['set'] = Xset(None, self)
     def __str__(self): return 'X<\'' + self._s + '\'>'
@@ -252,6 +253,7 @@ class Xint(XDictionaryObject):
         self['equals'] = Xint_equals(None, self)
         self['string'] = Xint_string(None, self)
         self['subtract'] = Xint_subtract(None, self)
+        self['to'] = Xint_to(None, self)
     def __str__(self): return 'X<int:%d>' % self._i
     def int(self): return self._i
 
@@ -276,6 +278,11 @@ def Xint_string(intepreter, i):
 @XFunction('int.subtract', converter=Xc_int)
 def Xint_subtract(intepreter, b, a=None): return Xint(a - b)
 
+@XFunction_takes_additional_arg('a', converter=Xc_int)
+@XFunction('int.to', converter=Xc_int)
+def Xint_to(intepreter, b, a=None):
+    return Xtuple(tuple(Xc_Xint(i) for i in range(a, b, 1 if a < b else -1)))
+
 @XFunction_takes_additional_arg('a', converter=Xc_str)
 @XFunction('string.concatenate', converter=Xc_str)
 def Xstring_concatenate(intepreter, b, a=None): return Xstring(a + b)
@@ -283,6 +290,11 @@ def Xstring_concatenate(intepreter, b, a=None): return Xstring(a + b)
 @XFunction_takes_additional_arg('a', converter=Xc_str)
 @XFunction('string.equals', converter=Xc_str)
 def Xstring_equals(intepreter, b, a=None): return Xc_Xbool(a == b)
+
+@XFunction_takes_additional_arg('s', converter=Xc_str)
+@XFunction('string.join', converter=Xc_tuple)
+def Xstring_join(intepreter, t, s=None):
+    return Xstring(s.join(Xc_str(x) for x in t))
 
 @XFunction('string.length', converter=Xc_str)
 def Xstring_length(intepreter, s): return Xc_Xint(len(s))
@@ -568,11 +580,16 @@ xslang_rootobj = XDictionaryObject({
             'new': Xint_new,
             'string': Xint_string,
             'subtract': Xint_subtract,
+            'to': Xint_to,
         }),
         'none': Xnone,
         'string': XDictionaryObject({
             'concatenate': Xstring_concatenate,
+            'constants': XDictionaryObject({
+                'newline': Xstring('\n'),
+            }),
             'equals': Xstring_equals,
+            'join': Xstring_join,
             'length': Xstring_length,
             'literal': XStringLiteralMutator(),
         }),
