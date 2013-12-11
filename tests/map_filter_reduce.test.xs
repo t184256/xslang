@@ -4,7 +4,7 @@
  .sum .set {x| (x.reduce {acc x| acc.add x})}
  [
   t.filter f,
- sum(t.map {x| x.add 1 })
+ sum(t.map {x| x.add 1})
  ]
 )
 ###

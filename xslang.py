@@ -517,7 +517,7 @@ tuple_auto = composition(
 #tuple_auto = tuple_auto_empties
 #tuple_auto = tuple_auto_creplace
 
-rich = composition(tuple_auto, int_auto, curly_braced_functions, dotty_literals)
+rich = composition(tuple_auto, curly_braced_functions, int_auto, dotty_literals)
 
 TRANSFORMATIONS = {
     'dotty_literals': dotty_literals,
