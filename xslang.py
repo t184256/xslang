@@ -166,7 +166,7 @@ def XFunction_python(s):
     sign_in, body = r.split(')', 1); params = sign_in.split(' ')
     params = [(p, 'any') if not ':' in p else p.split(':', 1) for p in params]
     s = ''
-    assert len(params) > 1
+    assert len(params) > 0
     for pn, pt in params[:-1]:
         s += "XFunction_takes_additional_arg('%s', converter=%s)(\n" % \
                 (pn, 'Xc_' + pt)
@@ -288,9 +288,10 @@ class Xint(XDictionaryObject):
     def __str__(self): return 'X<int:%d>' % self._i
     def int(self): return self._i
 
-@XFunction('int.new', converter=Xc_str)
-def Xint_new(intepreter, string):
-    return Xint(int(string))
+#@XFunction('int.new', converter=Xc_str)
+#def Xint_new(intepreter, string):
+#    return Xint(int(string))
+Xint_new = XFunction_python('Xint int.new(string:str) int(string)')
 
 @XFunction_takes_additional_arg('a', converter=Xc_int)
 @XFunction('int.add', converter=Xc_int)
