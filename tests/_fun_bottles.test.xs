@@ -4,9 +4,9 @@
    xslang.operator.if (i.equals 1)
     {i.string.concatenate .( bottle of beer)}
     {i.string.concatenate .( bottles of beer)}
-  } 
+  }
  )
- .concatenate (xslang.type.string.constants.newline)
+ .concatenate xslang.type.string.constants.newline
  .concatenate .(No more bottles of beer)
 )
 ###

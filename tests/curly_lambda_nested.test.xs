@@ -1,6 +1,6 @@
 (xslang (# syntax) (# enable) (# curly_braced_functions)
  xslang (# syntax) (# enable) (# dotty_literals)
- xslang.context.set.ctx (xslang.context)
+ xslang.context.set.ctx xslang.context
  { p |
   ctx.set.somename { unused | {x} }
   ctx.set.rev { y x | x y }

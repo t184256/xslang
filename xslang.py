@@ -395,13 +395,18 @@ def dotty_literals(stream):
             for z in tokens_forming_a_literal(inside): yield z
             continue
         if '.' in t and not t.startswith('.'):
+            yield '('
             p, t = t.split('.', 1)
             t = '.' + t
             yield p; yield ' '
-        while t.startswith('.') and '.' in t[1:]:
-            p, t = t[1:].split('.', 1)
-            t = '.' + t
-            for z in tokens_forming_a_literal(p): yield z
+            while t.startswith('.') and '.' in t[1:]:
+                p, t = t[1:].split('.', 1)
+                t = '.' + t
+                for z in tokens_forming_a_literal(p): yield z
+            if t:
+                for z in tokens_forming_a_literal(t[1:]): yield z
+            yield ''; yield ')'
+            continue
         for z in tokens_forming_a_literal(t[1:]): yield z
 
 def surround(what, with_=' '):
