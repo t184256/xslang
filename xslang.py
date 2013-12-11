@@ -175,7 +175,6 @@ def XFunction_python(s):
     s += "lambda interpreter, %s" % params[-1][0]
     s += ''.join(', %s=None' % p[0] for p in params[:-1])
     s += ': Xc_%s( %s )' % (type_, body) +  ')' * len(params)
-    print s
     return eval(s)
 
 def Xc_str(s):
@@ -268,13 +267,15 @@ def XfunctionOf(interpreter, arg, varname=None, body=None):
 Xternary = XFunction_python(
     'operator.ternary(cond:bool if_v else_v) if_v if cond else else_v')
 
-@XFunction_takes_additional_arg('condition', converter=Xc_bool)
-@XFunction_takes_additional_arg('if_body', converter=Xc_str)
-@XFunction('if', converter=Xc_str)
-def Xif(interpreter, else_body, if_body, condition=None):
-    body = if_body if condition else else_body
-    p = interpreter
-    return XInterpreter(body, parent=p).eval()
+#@XFunction_takes_additional_arg('condition', converter=Xc_bool)
+#@XFunction_takes_additional_arg('if_body', converter=Xc_str)
+#@XFunction('if', converter=Xc_str)
+#def Xif(interpreter, else_body, if_body, condition=None):
+#    body = if_body if condition else else_body
+#    p = interpreter
+#    return XInterpreter(body, parent=p).eval()
+Xif = XFunction_python('operator.if(cond:bool if_body:str else_body:str) ' +
+    'XInterpreter(if_body if cond else else_body, parent=interpreter).eval()')
 
 class Xint(XDictionaryObject):
     def __init__(self, i):
