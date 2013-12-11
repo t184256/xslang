@@ -298,7 +298,10 @@ class Xtuple(XDictionaryObject):
         self['add'] = Xtuple_add(None, self)
         self['get'] = Xtuple_get(None, self)
         self['equals'] = Xtuple_equals(None, self)
+        self['filter'] = Xtuple_filter(None, self)
         self['length'] = Xtuple_length(None, self)
+        self['map'] = Xtuple_map(None, self)
+        self['reduce'] = Xtuple_reduce(None, self)
     def __str__(self): return 'X<%s>' % ','.join(str(x) for x in self._t)
     def tuple(self): return self._t
 
@@ -328,6 +331,24 @@ def Xtuple_equals(intepreter, t2, t1=None):
 
 @XFunction('tuple.length', converter=Xc_tuple)
 def Xtuple_length(intepreter, t): return Xc_Xint(len(t))
+
+@XFunction_takes_additional_arg('t', converter=Xc_tuple)
+@XFunction('tuple.map')
+def Xtuple_map(i, func, t=None):
+    interpreter = i
+    return Xtuple(tuple(func(interpreter, x) for x in t))
+
+@XFunction_takes_additional_arg('t', converter=Xc_tuple)
+@XFunction('tuple.filter')
+def Xtuple_filter(i, func, t=None):
+    interpreter = i
+    return Xtuple(tuple(x for x in t if Xc_bool(func(interpreter, x))))
+
+@XFunction_takes_additional_arg('t', converter=Xc_tuple)
+@XFunction('tuple.reduce')
+def Xtuple_reduce(i, func, t=None):
+    return reduce(lambda acc, x: func(i, acc)(i, x), t)
+
 
 ### Syntax transformations ###
 
@@ -560,7 +581,10 @@ xslang_rootobj = XDictionaryObject({
             'empty': Xtuple(tuple()),
             'equals': Xtuple_equals,
             'get': Xtuple_get,
+            'filter': Xtuple_filter,
             'length': Xtuple_length,
+            'map': Xtuple_map,
+            'reduce': Xtuple_reduce,
         }),
     }),
 })
