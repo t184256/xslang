@@ -202,9 +202,9 @@ def Xc_Xint(i):
     if not isinstance(i, int): raise XException('Not an int: ' + str(i))
     return Xint(i)
 
-def Xc_Xtuple(i):
+def Xc_Xtuple(t):
     if not isinstance(t, tuple): raise XException('Not a tuple: ' + str(t))
-    return Xtuple(i)
+    return Xtuple(t)
 
 def Xc_Xbool(b):
     return Xtrue() if b else Xfalse()
@@ -273,29 +273,13 @@ class Xint(XDictionaryObject):
     def __str__(self): return 'X<int:%d>' % self._i
     def int(self): return self._i
 
-Xint_new = XFunction_python('Xint int.new(string:str) int(string)')
-
-@XFunction_takes_additional_arg('a', converter=Xc_int)
-@XFunction('int.add', converter=Xc_int)
-def Xint_add(intepreter, b, a=None):
-    return Xint(a + b)
-
-@XFunction_takes_additional_arg('a', converter=Xc_int)
-@XFunction('int.equals', converter=Xc_int)
-def Xint_equals(intepreter, b, a=None): return Xc_Xbool(a == b)
-
-@XFunction('int.string', converter=Xc_int)
-def Xint_string(intepreter, i):
-    return Xstring(str(i))
-
-@XFunction_takes_additional_arg('a', converter=Xc_int)
-@XFunction('int.subtract', converter=Xc_int)
-def Xint_subtract(intepreter, b, a=None): return Xint(a - b)
-
-@XFunction_takes_additional_arg('a', converter=Xc_int)
-@XFunction('int.to', converter=Xc_int)
-def Xint_to(intepreter, b, a=None):
-    return Xtuple(tuple(Xc_Xint(i) for i in range(a, b, 1 if a < b else -1)))
+Xint_new        = XFunction_python('Xint int.new(string:str) int(string)')
+Xint_add        = XFunction_python('Xint int.add(a:int b:int) a + b')
+Xint_equals     = XFunction_python('Xbool int.equals(a:int b:int) a == b')
+Xint_string     = XFunction_python('Xstring int.string(a:int) str(a)')
+Xint_subtract   = XFunction_python('Xint int.subtract(a:int b:int) a - b')
+Xint_to         = XFunction_python('Xtuple int.subtract(a:int b:int) '
+                  'tuple(Xc_Xint(i) for i in range(a, b, 1 if a < b else -1))')
 
 @XFunction_takes_additional_arg('a', converter=Xc_str)
 @XFunction('string.concatenate', converter=Xc_str)
