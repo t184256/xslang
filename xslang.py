@@ -243,14 +243,11 @@ class Xstring(XDictionaryObject):
     def str(self): return self._s
 
 @XFunction_takes_additional_arg('varname', converter=Xc_str)
-@XFunction('set')
+@XFunction('context.set')
 def Xset(interpreter, arg, varname=None):
     interpreter.context[varname] = arg
     return Xident
-
-@XFunction('get', converter=Xc_str)
-def Xget(interpreter, varname):
-    return interpreter.context[varname]
+Xget = XFunction_python('context.get(varname:str) interpreter[varname]')
 
 @XFunction_takes_additional_arg('varname', converter=Xc_str)
 @XFunction_takes_additional_arg('body', converter=Xc_str)
