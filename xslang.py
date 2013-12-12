@@ -71,7 +71,6 @@ def stream_read_single(tstream, token_stream=False):
         s = tstream.next()
         if not s:
             if not token_stream: return None
-            #else: return stream_read_word_or_brace(stream_str(''))
     if s == '(': s = stream_read_until_closing_brace(tstream)
     if token_stream:
         ts = stream_read_word_or_brace(stream_str(s))
@@ -89,7 +88,7 @@ class XInterpreter(object):
                 stream_str('(' + stream + ')')
                 if isinstance(stream, str) else stream
         )
-        self.parent = parent
+        self.parent = parent # A parent brace used for context lookups
         self.no_first_brace = no_first_brace
         self.previous = [] # For dirty introspection
         self.currently_mutating = None # For dirty introspection
@@ -113,7 +112,8 @@ class XInterpreter(object):
             n = self.token_stream.next()
             if n.isspace() or n == '': continue
             elif n == '(':
-                n = XInterpreter(self.token_stream, no_first_brace=True, parent=self)
+                n = XInterpreter(self.token_stream,
+                                 no_first_brace=True, parent=self)
                 self.currently_mutating = n
                 n = n.eval()
             elif n == ')': return f
@@ -259,21 +259,9 @@ def XfunctionOf(interpreter, arg, varname=None, body=None):
     interpreter.context[varname] = arg
     return XInterpreter(body, parent=interpreter).eval()
 
-#@XFunction_takes_additional_arg('condition', converter=Xc_bool)
-#@XFunction_takes_additional_arg('if_val')
-#@XFunction('ternary')
-#def Xternary(interpreter, else_val, if_val, condition=None):
-#    return if_val if condition else else_val
 Xternary = XFunction_python(
     'operator.ternary(cond:bool if_v else_v) if_v if cond else else_v')
 
-#@XFunction_takes_additional_arg('condition', converter=Xc_bool)
-#@XFunction_takes_additional_arg('if_body', converter=Xc_str)
-#@XFunction('if', converter=Xc_str)
-#def Xif(interpreter, else_body, if_body, condition=None):
-#    body = if_body if condition else else_body
-#    p = interpreter
-#    return XInterpreter(body, parent=p).eval()
 Xif = XFunction_python('operator.if(cond:bool if_body:str else_body:str) ' +
     'XInterpreter(if_body if cond else else_body, parent=interpreter).eval()')
 
@@ -288,9 +276,6 @@ class Xint(XDictionaryObject):
     def __str__(self): return 'X<int:%d>' % self._i
     def int(self): return self._i
 
-#@XFunction('int.new', converter=Xc_str)
-#def Xint_new(intepreter, string):
-#    return Xint(int(string))
 Xint_new = XFunction_python('Xint int.new(string:str) int(string)')
 
 @XFunction_takes_additional_arg('a', converter=Xc_int)
@@ -319,9 +304,6 @@ def Xint_to(intepreter, b, a=None):
 @XFunction('string.concatenate', converter=Xc_str)
 def Xstring_concatenate(intepreter, b, a=None): return Xstring(a + b)
 
-#@XFunction_takes_additional_arg('a', converter=Xc_str)
-#@XFunction('string.equals', converter=Xc_str)
-#def Xstring_equals(intepreter, b, a=None): return Xc_Xbool(a == b)
 Xstring_equals = XFunction_python('Xbool string.equals(a:str b:str) a == b')
 
 @XFunction_takes_additional_arg('s', converter=Xc_str)
@@ -471,10 +453,10 @@ def replace_(c, pairs):
     return c
 
 def creplace(*pairs):
-    def surr(cstream):
+    def sur(cstream):
         for c in cstream:
             for z in replace_(c, pairs): yield z
-    return composition(stream_detokenize_stream, surr, stream_read_word_or_brace)
+    return composition(stream_detokenize_stream, sur, stream_read_word_or_brace)
 
 def curly_braced_functions_(tstream):
     while True:
@@ -539,10 +521,8 @@ def tuple_auto_empties(stream):
                 yield z
             yield ''; yield ')'
         elif t == '[':
-            l = [t]
-            l.append(stream.next())
-            while not l[-1] or l[-1].isspace():
-                l.append(stream.next())
+            l = [t, stream.next()]
+            while not l[-1] or l[-1].isspace(): l.append(stream.next())
             if l[-1] == ']':
                 # Empty tuple
                 for z in tokens_walking_a_path('type', 'tuple', 'empty'):
@@ -552,10 +532,9 @@ def tuple_auto_empties(stream):
                 if l[-1] in ('[', '[]'):
                     t = l[-1]
                     del l[-1]
-                    no_read=True
+                    no_read = True
                 for z in l: yield z
-        else:
-            yield t
+        else: yield t
 
 tuple_auto_creplace = creplace(
     ('[', ' (xslang (# type) (# tuple) (# empty) (# add) ('),
@@ -566,8 +545,6 @@ tuple_auto = composition(
     surround('['), surround(']'),
     tuple_auto_empties, tuple_auto_creplace
 )
-#tuple_auto = tuple_auto_empties
-#tuple_auto = tuple_auto_creplace
 
 rich = composition(tuple_auto, curly_braced_functions, int_auto, dotty_literals)
 
@@ -582,7 +559,6 @@ TRANSFORMATIONS = {
 def expand(string, transformation_name='rich'):
     tr = TRANSFORMATIONS[transformation_name]
     return '$%s$' % ''.join(tr(stream_read_word_or_brace(stream_str(string))))
-
 
 @XFunction('syntax.enable')
 def XsyntaxEnable(interpreter, transformation_name):
