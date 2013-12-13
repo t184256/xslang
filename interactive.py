@@ -97,14 +97,14 @@ def shorten(s, maxlen):
     return s[:maxlen - 3] + '..' + s[-1]
 
 def printstate(b, shorten_to=80, stars=1):
-    for f in b.previous + [b.currently_mutating]:
+    for f in b.chain + [b.currently_mutating]:
         if isinstance(f, XInterpreter):
             printstate(f, shorten_to, stars=stars+1)
         s = str(f)
         if not s: s = '...'
         if f == b.currently_mutating and isinstance(b, XInterpreter): continue
         symbol = '*' if f != b.currently_mutating else '.'
-        highlighted = f == b.previous[-1]
+        highlighted = f == b.chain[-1]
         line_len = shorten_to - stars - 1 - (3 if highlighted else 0)
         line = symbol * stars + ' ' + shorten(s, line_len)
         if highlighted:
@@ -145,7 +145,7 @@ def main():
             s = i.h
             choices = i.xi.context.keys()
             curr = None
-            if i.xi.previous: curr = i.xi.previous[:-1]
+            if i.xi.chain: curr = i.xi.chain[:-1]
             if i.xi.currently_mutating: curr = i.xi.currently_mutating
             while isinstance(curr, XInterpreter):
                 if not curr.currently_mutating is None:

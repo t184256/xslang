@@ -99,7 +99,7 @@ class XInterpreter(object):
         )
         self.parent = parent # A parent brace used for context lookups
         self.no_first_brace = no_first_brace
-        self.previous = [] # For dirty introspection
+        self.chain = [] # For dirty introspection
         self.currently_mutating = None # For dirty introspection
 
     def __getitem__(self, n, maxdepth=-1):
@@ -125,21 +125,21 @@ class XInterpreter(object):
                 self.currently_mutating = n
                 n = n.eval()
             elif n == ')':
-                if self.previous: return self.previous[-1]
+                if self.chain: return self.chain[-1]
                 else: return Xnone()
             if (isinstance(n, str)):
                 if n in self: n = self[n]
                 else: raise XException("'%s' not found in current context!" % n)
                 #else: n = XRawCode(n)
             assert isinstance(n, XObject)
-            if not self.previous: self.previous.append(n)
-            else: self.previous.append(self.previous[-1](self, n))
-            while '__mutate__' in dir(self.previous[-1]):
-                self.currently_mutating = self.previous[-1]
+            if not self.chain: self.chain.append(n)
+            else: self.chain.append(self.chain[-1](self, n))
+            while '__mutate__' in dir(self.chain[-1]):
+                self.currently_mutating = self.chain[-1]
                 transformed = self.currently_mutating.__mutate__(interpreter=self)
                 if transformed is None: break # Cancel transformation
-                else: self.previous[-1] = transformed
-            assert isinstance(self.previous[-1], XObject)
+                else: self.chain[-1] = transformed
+            assert isinstance(self.chain[-1], XObject)
             self.currently_mutating = None
 
 ### Helper decorators for standard library ###
@@ -241,9 +241,9 @@ def Xreverse(interpreter, func, left_arg):
 
 class XReverseMutator(XObject):
     def __mutate__(self, interpreter):
-        if not interpreter.parent.previous: return None
-        #if len(interpreter.parent.previous) != 1: return None
-        prev = interpreter.parent.previous.pop()
+        if not interpreter.parent.chain: return None
+        #if len(interpreter.parent.chain) != 1: return None
+        prev = interpreter.parent.chain.pop()
         return Xreverse(interpreter, prev)
     def __str__(self): return 'X<ReverseMutator>'
 
