@@ -615,4 +615,11 @@ xslang_rootobj = XDictionaryObject({
     }),
 })
 
+XInterpreter("""(xslang (# syntax) (# enable) (# dotty_literals)
+.pyfunc .set xslang.internals.pyfunc
+
+xslang.internals.extend xslang.type.string .reverse
+ (pyfunc .(Xstring string.reverse(string:str) string[::-1]))
+)""", root_obj=xslang_rootobj).eval()
+
 if __name__ == '__main__': print XInterpreter(raw_input()).eval()
