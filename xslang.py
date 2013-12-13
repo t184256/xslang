@@ -24,9 +24,12 @@ class XObject(object):
 class XException(Exception): pass
 
 class XBool(XObject): pass
-class Xtrue(XBool): pass
-class Xfalse(XBool): pass
-class Xnone(XObject): pass
+class Xtrue(XBool):
+    def __str__(self): return 'X<true>'
+class Xfalse(XBool):
+    def __str__(self): return 'X<false>'
+class Xnone(XObject):
+    def __str__(self): return 'X<none>'
 
 ### Streaming ###
 
@@ -230,6 +233,17 @@ class XDictionaryObject(XObject, dict):
         if not arg in self: raise XException('"%s" not found!' % arg)
         return self[arg]
     def __str__(self): return 'XDICT<' + ','.join(sorted(self.keys())) + '>'
+
+@XFunction_takes_additional_arg('dict_obj')
+@XFunction_takes_additional_arg('name', converter=Xc_str)
+@XFunction('internals.extend')
+def Xextend(interpreter, obj, name=None, dict_obj=None):
+    dict_obj[name] = obj
+    return Xident
+
+@XFunction('internals.pyfunc', converter=Xc_str)
+def Xpyfunc(interpreter, body):
+    return XFunction_python(body)
 
 class Xstring(XDictionaryObject):
     def __init__(self, s):
@@ -549,6 +563,10 @@ xslang_rootobj = XDictionaryObject({
     }),
     'function': XDictionaryObject({
         'of': XfunctionOf,
+    }),
+    'internals': XDictionaryObject({
+        'extend': Xextend,
+        'pyfunc': Xpyfunc,
     }),
     'operator': XDictionaryObject({
         'ident': Xident,
