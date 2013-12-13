@@ -285,22 +285,16 @@ Xint_to         = XFunction_python('Xtuple int.subtract(a:int b:int) '
 @XFunction('string.concatenate', converter=Xc_str)
 def Xstring_concatenate(intepreter, b, a=None): return Xstring(a + b)
 
-Xstring_equals = XFunction_python('Xbool string.equals(a:str b:str) a == b')
-
-@XFunction_takes_additional_arg('s', converter=Xc_str)
-@XFunction('string.join', converter=Xc_tuple)
-def Xstring_join(intepreter, t, s=None):
-    return Xc_Xstring(s.join(Xc_str(x) for x in t))
-Xstring_join = XFunction_python(
+Xstring_concatenate = XFunction_python(
+    'Xstring string.concatenate(a:str b:str) a + b')
+Xstring_equals  = XFunction_python('Xbool string.equals(a:str b:str) a == b')
+Xstring_join    = XFunction_python(
     'Xstring string.join(s:str t:tuple) s.join(Xc_str(x) for x in t)')
-
-@XFunction('string.length', converter=Xc_str)
-def Xstring_length(intepreter, s): return Xc_Xint(len(s))
+Xstring_length  = XFunction_python('Xint string.equals(s:str) len(s)')
 
 class XStringLengthLazyMutator(XObject):
     def __init__(self, Xstr): self._Xstr = Xstr
-    def __mutate__(self, interpreter):
-        return Xint(self._xstr)
+    def __mutate__(self, interpreter): return Xint(self._xstr)
 
 class Xtuple(XDictionaryObject):
     def __init__(self, t):
