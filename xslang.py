@@ -254,6 +254,22 @@ class XDictionaryObject(XObject, dict):
         return self[arg]
     def __str__(self): return 'XDICT<' + ','.join(sorted(self.keys())) + '>'
 
+class XBoundMethodMutator(XObject):
+    def __init__(self, func, obj):
+        self.func, self.obj = func, obj
+    def __mutate__(self, interpreter):
+        return self.func(interpreter, self.obj)
+
+def XFunctionBind(func, obj, name):
+    obj[name] = XBoundMethodMutator(func, obj)
+
+@XFunction_takes_additional_arg('dict_obj')
+@XFunction_takes_additional_arg('name', converter=Xc_str)
+@XFunction('internals.bind')
+def Xbind(interpreter, func, name=None, dict_obj=None):
+    XFunctionBind(func, dict_obj, name)
+    return Xident
+
 @XFunction('internals.empty')
 def Xempty(interpreter, unused):
     return XDictionaryObject()
@@ -305,7 +321,8 @@ class Xint(XDictionaryObject):
         self._i = i
         self['add'] = Xint_add(None, self)
         self['equals'] = Xint_equals(None, self)
-        self['string'] = Xint_string(None, self)
+        #self['string'] = Xint_string(None, self)
+        XFunctionBind(Xint_string, self, 'string')
         self['subtract'] = Xint_subtract(None, self)
         self['to'] = Xint_to(None, self)
     def __str__(self): return 'X<int:%d>' % self._i
@@ -625,6 +642,7 @@ xslang_rootobj = XDictionaryObject({
         'of': XfunctionOf,
     }),
     'internals': XDictionaryObject({
+        'bind': Xbind,
         'empty': Xempty,
         'inject': Xinject,
         'pyfunc': Xpyfunc,
