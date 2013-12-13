@@ -1,5 +1,5 @@
 (xslang (# syntax) (# enable) (# rich)
- .pre .set .HE
+ .pre .set 'HE'
  .mid .set .L
  .mid .set (mid.concatenate mid)
  .post .set .O

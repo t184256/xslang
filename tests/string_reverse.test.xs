@@ -1,6 +1,6 @@
 (xslang (# syntax) (# enable) (# rich)
 
-xslang.type.string.reverse .(pylesos)
+xslang.type.string.reverse 'pylesos'
 
 )
 ###

@@ -2,12 +2,12 @@
  xslang.type.string.constants.newline.join(
   ( 10 .to 0 ).map { i |
    xslang.operator.if (i.equals 1)
-    {i.string.concatenate .( bottle of beer)}
-    {i.string.concatenate .( bottles of beer)}
+    {i.string.concatenate ' bottle of beer'}
+    {i.string.concatenate ' bottles of beer'}
   }
  )
  .concatenate xslang.type.string.constants.newline
- .concatenate .(No more bottles of beer)
+ .concatenate 'No more bottles of beer'
 )
 ###
 X<'10 bottles of beer
