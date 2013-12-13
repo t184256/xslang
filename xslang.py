@@ -535,7 +535,37 @@ tuple_auto = composition(
     tuple_auto_empties, tuple_auto_creplace
 )
 
-rich = composition(tuple_auto, curly_braced_functions, int_auto, dotty_literals)
+def quoted_strings_encode_(cstream):
+    while True:
+        t = cstream.next()
+        if t == '\'':
+            s = ''
+            while not s.endswith('\'') or s.endswith('\\\''):
+                s += cstream.next()
+            yield '\''
+            for z in s[:-1].encode('base64'): yield z
+            yield '\''
+        else: yield t
+quoted_strings_encode = composition(
+    stream_detokenize_stream, quoted_strings_encode_, stream_read_word_or_brace)
+
+def quoted_strings_decode_(cstream):
+    while True:
+        t = cstream.next()
+        if t == '\'':
+            s = ''
+            while not s.endswith('\''): s += cstream.next()
+            s = s.decode('base64').replace('\\\'', '\'')
+            for z in tokens_forming_a_literal(s): yield z
+        else: yield t
+quoted_strings_decode = composition(
+    stream_detokenize_stream, quoted_strings_decode_, stream_read_word_or_brace)
+
+rich = composition(
+    quoted_strings_encode,
+    tuple_auto, curly_braced_functions, int_auto, dotty_literals,
+    quoted_strings_decode,
+)
 
 TRANSFORMATIONS = {
     'dotty_literals': dotty_literals,
