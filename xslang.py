@@ -540,7 +540,8 @@ def quoted_strings_encode_(cstream):
         t = cstream.next()
         if t == '\'':
             s = ''
-            while not s.endswith('\'') or s.endswith('\\\''):
+            while (not s.endswith('\'') or s.endswith('\\\'')) and not \
+                    s.endswith('\\\\\''):
                 s += cstream.next()
             yield '\''
             for z in s[:-1].encode('base64'): yield z
@@ -555,7 +556,9 @@ def quoted_strings_decode_(cstream):
         if t == '\'':
             s = ''
             while not s.endswith('\''): s += cstream.next()
-            s = s.decode('base64').replace('\\\'', '\'')
+            s = s.decode('base64')
+            s = s.replace('\\\'', '\'')
+            s = s.replace('\\\\', '\\')
             for z in tokens_forming_a_literal(s): yield z
         else: yield t
 quoted_strings_decode = composition(

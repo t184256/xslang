@@ -76,6 +76,7 @@ if __name__ == '__main__':
             print 'Rich expansion      ', expand(c)
             print 'Evaluation returned:', e
             print 'Expected:           ', r
+            print
             failed.append(testfile)
         if not failed:
             dl.prefix_add('+', redraw_postfix=False)
