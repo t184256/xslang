@@ -31,6 +31,12 @@ class Xfalse(XBool):
 class Xnone(XObject):
     def __str__(self): return 'X<none>'
 
+#class XRawCode(object):
+#    def __init__(self, s): self.s = s
+#    def __add__(self, s): return XRawCode(self.s + s)
+#    def __str__(self): return "X<RawCode:'%s'>" % self.s
+#    def code(self): return self.s
+
 ### Streaming ###
 
 def stream_str(string):
@@ -110,7 +116,6 @@ class XInterpreter(object):
     def eval(self):
         if not self.no_first_brace:
            if self.token_stream.next() != '(': raise XException('No (')
-        f = None
         while True:
             n = self.token_stream.next()
             if n.isspace() or n == '': continue
@@ -119,20 +124,22 @@ class XInterpreter(object):
                                  no_first_brace=True, parent=self)
                 self.currently_mutating = n
                 n = n.eval()
-            elif n == ')': return f
+            elif n == ')':
+                if self.previous: return self.previous[-1]
+                else: return Xnone()
             if (isinstance(n, str)):
                 if n in self: n = self[n]
-                else: raise XException('No ' + n + ' in current context!')
-            if f is None: f = n
-            else: f = f(self, n)
-            assert isinstance(f, XObject)
-            while '__mutate__' in dir(f):
-                self.currently_mutating = f
-                transformed = f.__mutate__(interpreter=self)
+                else: raise XException("'%s' not found in current context!" % n)
+                #else: n = XRawCode(n)
+            assert isinstance(n, XObject)
+            if not self.previous: self.previous.append(n)
+            else: self.previous.append(self.previous[-1](self, n))
+            while '__mutate__' in dir(self.previous[-1]):
+                self.currently_mutating = self.previous[-1]
+                transformed = self.currently_mutating.__mutate__(interpreter=self)
                 if transformed is None: break # Cancel transformation
-                else: f = transformed
-                assert isinstance(f, XObject)
-            self.previous.append(f)
+                else: self.previous[-1] = transformed
+            assert isinstance(self.previous[-1], XObject)
             self.currently_mutating = None
 
 ### Helper decorators for standard library ###
@@ -226,6 +233,19 @@ class XStringLiteralMutator(XObject):
 def Xident(interpreter, arg): return arg
 @XFunction('ignore')
 def Xignore(interpreter, arg): return Xident
+
+@XFunction_takes_additional_arg('left_arg')
+@XFunction('reverse')
+def Xreverse(interpreter, func, left_arg):
+    return func(interpreter, left_arg)
+
+class XReverseMutator(XObject):
+    def __mutate__(self, interpreter):
+        if not interpreter.parent.previous: return None
+        #if len(interpreter.parent.previous) != 1: return None
+        prev = interpreter.parent.previous.pop()
+        return Xreverse(interpreter, prev)
+    def __str__(self): return 'X<ReverseMutator>'
 
 class XDictionaryObject(XObject, dict):
     def __call__(self, interpreter, arg):
@@ -568,8 +588,11 @@ def quoted_strings_decode_(cstream):
 quoted_strings_decode = composition(
     stream_detokenize_stream, quoted_strings_decode_, stream_read_word_or_brace)
 
+prefix_operator = creplace(('~', ' (xslang (# operator) (# prefix)) '))
+
 rich = composition(
     quoted_strings_encode,
+    prefix_operator,
     tuple_auto, curly_braced_functions, int_auto, dotty_literals,
     quoted_strings_decode,
 )
@@ -611,6 +634,8 @@ xslang_rootobj = XDictionaryObject({
         'ignore': Xignore,
         'ternary': Xternary,
         'if': Xif,
+        'reverse': Xreverse,
+        'prefix': XReverseMutator(),
     }),
     'package': XDictionaryObject({}),
     'syntax': XDictionaryObject({
