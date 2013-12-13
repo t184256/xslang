@@ -234,10 +234,14 @@ class XDictionaryObject(XObject, dict):
         return self[arg]
     def __str__(self): return 'XDICT<' + ','.join(sorted(self.keys())) + '>'
 
+@XFunction('internals.empty')
+def Xempty(interpreter, unused):
+    return XDictionaryObject()
+
 @XFunction_takes_additional_arg('dict_obj')
 @XFunction_takes_additional_arg('name', converter=Xc_str)
-@XFunction('internals.extend')
-def Xextend(interpreter, obj, name=None, dict_obj=None):
+@XFunction('internals.inject')
+def Xinject(interpreter, obj, name=None, dict_obj=None):
     dict_obj[name] = obj
     return Xident
 
@@ -598,7 +602,8 @@ xslang_rootobj = XDictionaryObject({
         'of': XfunctionOf,
     }),
     'internals': XDictionaryObject({
-        'extend': Xextend,
+        'empty': Xempty,
+        'inject': Xinject,
         'pyfunc': Xpyfunc,
     }),
     'operator': XDictionaryObject({
@@ -651,7 +656,7 @@ xslang_rootobj = XDictionaryObject({
 XInterpreter("""(xslang (# syntax) (# enable) (# dotty_literals)
 .pyfunc .set xslang.internals.pyfunc
 
-xslang.internals.extend xslang.type.string .reverse
+xslang.internals.inject xslang.type.string .reverse
  (pyfunc .(Xstring string.reverse(string:str) string[::-1]))
 )""", root_obj=xslang_rootobj).eval()
 
