@@ -296,7 +296,7 @@ class Xstring(XDictionaryObject):
         self['concatenate'] = Xstring_concatenate(None, self)
         self['equals'] = Xstring_equals(None, self)
         self['join'] = Xstring_join(None, self)
-        self['length'] = XStringLengthLazyMutator(self)
+        self['length'] = Xstring_length(None, self)
         self['set'] = Xset(None, self)
     def __str__(self): return 'X<\'' + self._s + '\'>'
     def str(self): return self._s
@@ -328,7 +328,8 @@ Xlazy = XFunction_python('operator.lazy(delay:int mutator_body:str) ' +
 def Xabort(interpreter, reason): raise XException('Aborted: %s' % reason)
 
 class XLazyMutator(XObject):
-    def __init__(self, wrapped, delay=1): self.wrapped, self.delay = wrapped, delay
+    def __init__(self, wrapped, delay=1):
+        self.wrapped, self.delay = wrapped, delay
     def __mutate__(self, interpreter):
         if self.delay > 0: self.delay -= 1; return
         return XInterpreter(self.wrapped, parent=interpreter).eval()
@@ -339,7 +340,6 @@ class Xint(XDictionaryObject):
         self._i = i
         self['add'] = Xint_add(None, self)
         self['equals'] = Xint_equals(None, self)
-        #self['string'] = Xint_string(None, self)
         XFunctionBind(Xint_string, self, 'string')
         self['subtract'] = Xint_subtract(None, self)
         self['to'] = Xint_to(None, self)
@@ -364,10 +364,6 @@ Xstring_equals  = XFunction_python('Xbool string.equals(a:str b:str) a == b')
 Xstring_join    = XFunction_python(
     'Xstring string.join(s:str t:tuple) s.join(Xc_str(x) for x in t)')
 Xstring_length  = XFunction_python('Xint string.equals(s:str) len(s)')
-
-class XStringLengthLazyMutator(XObject):
-    def __init__(self, Xstr): self._Xstr = Xstr
-    def __mutate__(self, interpreter): return Xint(self._xstr)
 
 class Xtuple(XDictionaryObject):
     def __init__(self, t):
@@ -690,6 +686,7 @@ xslang_rootobj = XDictionaryObject({
             'string': Xint_string,
             'subtract': Xint_subtract,
             'to': Xint_to,
+            'zero': Xint(0),
         }),
         'none': Xnone,
         'string': XDictionaryObject({
@@ -715,11 +712,23 @@ xslang_rootobj = XDictionaryObject({
     }),
 })
 
-XInterpreter("""(xslang (# syntax) (# enable) (# dotty_literals)
+XInterpreter("""(xslang (# syntax) (# enable) (# rich)
 .pyfunc .set xslang.internals.pyfunc
 
 xslang.internals.inject xslang.type.string .reverse
- (pyfunc .(Xstring string.reverse(string:str) string[::-1]))
+ (pyfunc 'Xstring string.reverse(string:str) string[::-1]')
+
+xslang.internals.inject xslang.type.int .greater
+ (pyfunc 'Xbool int.greater(a:int b:int) a > b')
+
+xslang.internals.inject xslang.operator .eval {c | xslang.operator.lazy 0 c}
+
+xslang.internals.inject xslang.operator .assert
+ {c|
+   xslang.operator.if (xslang.operator.eval c)
+    {xslang.operator.ident} {xslang.operator.abort c}
+ }
+
 )""", root_obj=xslang_rootobj).eval()
 
 if __name__ == '__main__': print XInterpreter(raw_input()).eval()

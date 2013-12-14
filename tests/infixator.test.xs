@@ -2,7 +2,6 @@
 
 .- .set (xslang.operator.lazy 2 {~ xslang.type.int.subtract})
 
-
 .+ .set .add
 
 [3 + 2, 7 - 3, xslang.type.tuple.empty + 'a' + 'b' + 'c']]
