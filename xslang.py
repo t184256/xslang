@@ -324,6 +324,9 @@ Xif = XFunction_python('operator.if(cond:bool if_body:str else_body:str) ' +
 Xlazy = XFunction_python('operator.lazy(delay:int mutator_body:str) ' +
     'XLazyMutator(mutator_body, delay)')
 
+@XFunction('operator.abort', converter=Xc_str)
+def Xabort(interpreter, reason): raise XException('Aborted: %s' % reason)
+
 class XLazyMutator(XObject):
     def __init__(self, wrapped, delay=1): self.wrapped, self.delay = wrapped, delay
     def __mutate__(self, interpreter):
@@ -663,6 +666,7 @@ xslang_rootobj = XDictionaryObject({
         'pyfunc': Xpyfunc,
     }),
     'operator': XDictionaryObject({
+        'abort': Xabort,
         'lazy': Xlazy,
         'ident': Xident,
         'ignore': Xignore,
