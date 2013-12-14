@@ -132,13 +132,19 @@ class XInterpreter(object):
                 else: raise XException("'%s' not found in current context!" % n)
                 #else: n = XRawCode(n)
             assert isinstance(n, XObject)
-            if not self.chain: self.chain.append(n)
-            else: self.chain.append(self.chain[-1](self, n))
-            while '__mutate__' in dir(self.chain[-1]):
-                self.currently_mutating = self.chain[-1]
-                transformed = self.currently_mutating.__mutate__(interpreter=self)
+            while '__mutate__' in dir(n):
+                transformed = n.__mutate__(interpreter=self)
                 if transformed is None: break # Cancel transformation
-                else: self.chain[-1] = transformed
+                else: n = transformed
+            assert isinstance(n, XObject)
+            if not self.chain: self.chain.append(n)
+            else:
+                self.chain.append(self.chain[-1](self, n))
+                while '__mutate__' in dir(self.chain[-1]):
+                    self.currently_mutating = self.chain[-1]
+                    transformed = self.currently_mutating.__mutate__(interpreter=self)
+                    if transformed is None: break # Cancel transformation
+                    else: self.chain[-1] = transformed
             assert isinstance(self.chain[-1], XObject)
             self.currently_mutating = None
 
@@ -234,18 +240,17 @@ def Xident(interpreter, arg): return arg
 @XFunction('ignore')
 def Xignore(interpreter, arg): return Xident
 
-@XFunction_takes_additional_arg('left_arg')
-@XFunction('reverse')
-def Xreverse(interpreter, func, left_arg):
-    return func(interpreter, left_arg)
+@XFunction('prefix')
+def Xprefix(interpreter, func):
+    return XPrefixMutator(func)
 
-class XReverseMutator(XObject):
+class XPrefixMutator(XObject):
+    def __init__(self, func): self.func = func
     def __mutate__(self, interpreter):
+        if not interpreter.parent: return None
         if not interpreter.parent.chain: return None
-        #if len(interpreter.parent.chain) != 1: return None
-        prev = interpreter.parent.chain.pop()
-        return Xreverse(interpreter, prev)
-    def __str__(self): return 'X<ReverseMutator>'
+        return self.func(interpreter, interpreter.parent.chain.pop())
+    def __str__(self): return 'X<ReverseMutator func=%s>' % self.func
 
 class XDictionaryObject(XObject, dict):
     def __call__(self, interpreter, arg):
@@ -315,6 +320,16 @@ Xternary = XFunction_python(
 
 Xif = XFunction_python('operator.if(cond:bool if_body:str else_body:str) ' +
     'XInterpreter(if_body if cond else else_body, parent=interpreter).eval()')
+
+Xlazy = XFunction_python('operator.lazy(delay:int mutator_body:str) ' +
+    'XLazyMutator(mutator_body, delay)')
+
+class XLazyMutator(XObject):
+    def __init__(self, wrapped, delay=1): self.wrapped, self.delay = wrapped, delay
+    def __mutate__(self, interpreter):
+        if self.delay > 0: self.delay -= 1; return
+        return XInterpreter(self.wrapped, parent=interpreter).eval()
+    def __str__(self): return 'X<LazyMutator %s>' % self.wrapped
 
 class Xint(XDictionaryObject):
     def __init__(self, i):
@@ -648,12 +663,12 @@ xslang_rootobj = XDictionaryObject({
         'pyfunc': Xpyfunc,
     }),
     'operator': XDictionaryObject({
+        'lazy': Xlazy,
         'ident': Xident,
         'ignore': Xignore,
         'ternary': Xternary,
         'if': Xif,
-        'reverse': Xreverse,
-        'prefix': XReverseMutator(),
+        'prefix': Xprefix,
     }),
     'package': XDictionaryObject({}),
     'syntax': XDictionaryObject({
