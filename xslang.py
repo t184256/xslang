@@ -313,7 +313,21 @@ Xget = XFunction_python('context.get(varname:str) interpreter[varname]')
 @XFunction('function.of')
 def XfunctionOf(interpreter, arg, varname=None, body=None):
     interpreter.context[varname] = arg
-    return XInterpreter(body, parent=interpreter).eval()
+    xi =  XInterpreter(body, parent=interpreter)
+    return xi.eval()
+
+@XFunction_takes_additional_arg('varname1', converter=Xc_str)
+@XFunction_takes_additional_arg('varname2', converter=Xc_str)
+@XFunction('function.dualarg', converter=Xc_str)
+def Xdualarg(interpreter, body, varname1=None, varname2=None):
+    @XFunction_takes_additional_arg('val1')
+    @XFunction('function.of.dualarg')
+    def func(interpreter, val2, val1=None):
+        xi = XInterpreter(body, parent=interpreter)
+        xi.context[varname1] = val1
+        xi.context[varname2] = val2
+        return xi.eval()
+    return func
 
 Xternary = XFunction_python(
     'operator.ternary(cond:bool if_v else_v) if_v if cond else else_v')
@@ -654,6 +668,7 @@ xslang_rootobj = XDictionaryObject({
     }),
     'function': XDictionaryObject({
         'of': XfunctionOf,
+        'dualarg': Xdualarg,
     }),
     'internals': XDictionaryObject({
         'bind': Xbind,
