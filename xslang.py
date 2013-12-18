@@ -104,6 +104,7 @@ def box(pyval):
     elif pyval is None:             base = 'none'
     elif isinstance(pyval, str):    base = 'string'
     elif isinstance(pyval, tuple):  base = 'list'
+    elif hasattr(pyval, '__iter__'):base = 'list'; pyval = list(pyval)
     else: raise XError('How to box type %s?' % type(pyval))
     base = xslang['type'][base]['base']
     return base.extend('__py_val__', pyval)
@@ -295,9 +296,9 @@ class XInterpreter(XObject):
         else: self['state'] = self['state'](t, context=self)
         if '__hack_apply__' in self['state']:
             #print 'got hack', self['state']['__hack_apply__']
-            hack_result = self['state']['__hack_apply__'](self)
+            self['state'] = self['state']['__hack_apply__'](self)
             #print 'hack resulted in', hack_result
-            if hack_result is not None: self['state'] = hack_result
+            #if hack_result is not None: self['state'] = hack_result
 
     def process_token(self, t, context):
         if not context: raise XError("NCTX")
@@ -354,8 +355,7 @@ def hack_literal(xinterp, context=None):
     literal = literal.strip()
     if literal.startswith('(') and literal.endswith(')'):
         literal = literal[1:-1]
-    xinterp['state'] = box(literal)
-    return
+    return box(literal)
 
 hack = Xobject.ext({'__name__': box('xslang.hack package'),
     'apply': hack_apply,
