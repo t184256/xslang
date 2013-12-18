@@ -337,9 +337,7 @@ def XPyFunc(pyfunc, argnames=None, argvals=None):
     return XContext(c, argnames=argnames, argvals=argvals)
 
 def XWrappedPyFunc(*argnames, **argvals):
-    def wrapper(func):
-        return XPyFunc(func, argnames, argvals).ext(name=func.func_name)
-    return wrapper
+    return lambda fun: XPyFunc(fun, argnames, argvals).ext(name=fun.func_name)
 
 ### Hacks ###
 
