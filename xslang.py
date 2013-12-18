@@ -364,6 +364,17 @@ xslang = xslang.ext(hack=hack)
 
 ### Python-implemented functions ###
 
+@XWrappedPyFunc('argname', 'body')
+def function_of(argname, body, context=None):
+    argname, body = unbox(argname), unbox(body)
+    return XContext(body, argnames=(argname,))
+
+function = Xobject.ext({'__name__': box('xslang.function package'),
+        'of': function_of,
+})
+
+xslang = xslang.ext(function=function)
+
 def Xdummy_py(context=None):
     return box('dummy')
 Xdummy = XPyFunc(Xdummy_py).ext(__name__=box('dummy func'))
