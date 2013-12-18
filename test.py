@@ -16,7 +16,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-from xslang import XInterpreter, XException, expand
+from xslang import XContext, XError#, expand
 import os, sys, time, traceback
 
 class DynamicLine(object):
@@ -53,7 +53,7 @@ if __name__ == '__main__':
         dl.print_postfix('| '.rjust(len(TESTFILES) - i + 2) + testfile)
         testfilepath = os.path.join('tests', testfile)
         s = file(testfilepath).read()
-        if not s.startswith('('):
+        if s.startswith('DISABLED'):
             dl.prefix_add('_')
             disabled.append(testfile)
             continue
@@ -61,19 +61,19 @@ if __name__ == '__main__':
         c, r = c.strip(), r.strip()
         tstart = time.time()
         try:
-            e = XInterpreter(c).eval()
+            e = XContext.create(c)
         except Exception, ex:
             print
             print 'WHILE EVALUATING', testfile
             print c
             print traceback.format_exc(ex)
-            e = 'XException(%s)' % ex if isinstance(ex, XException) else str(ex)
+            e = 'XError(%s)' % ex if isinstance(ex, XError) else 'Err(%s)' % ex
         duration = time.time() - tstart
         if duration > longest_t: longest, longest_t = testfile, duration
         if not str(e) == r:
             print
             print 'A test failed:      ', c
-            print 'Rich expansion      ', expand(c)
+#            print 'Rich expansion      ', expand(c)
             print 'Evaluation returned:', e
             print 'Expected:           ', r
             print
@@ -82,8 +82,11 @@ if __name__ == '__main__':
             dl.prefix_add('+', redraw_postfix=False)
     print '|'
     gduration = time.time() - gstart
-    for f in disabled:
-        print 'TEST DISABLED:', f
+    if disabled:
+        if len(disabled) <= 3:
+            for f in disabled:
+                print 'TEST DISABLED:', f
+        else: print 'TESTS DISABLED:', len(disabled)
     for f in failed:
         print 'TEST FAILED:', f
     if not failed:

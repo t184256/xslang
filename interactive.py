@@ -16,16 +16,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-from xslang import XInterpreter, XException, XDictionaryObject
+from xslang import XContext, XError
 
 import sys, time, re, traceback
 
-# TODO: remove
-ugly_objectdesc = re.compile(r'<(\S*) object at .*>')
-
-class BackspaceException(Exception): pass
-class ControlWException(Exception): pass
-class TabException(Exception): pass
+### Platform-dependent functions ###
 
 # TODO: compact
 try:
@@ -41,6 +36,7 @@ except ImportError:
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
         return ch
+
 try:
     from colorama import init, Fore, Back, Style
     def colored(text, color='white', bg='black', style='normal'):
@@ -53,6 +49,12 @@ try:
 except:
     def colored(text, *a, **kwa): return text
 
+### The important part ###
+
+class BackspaceException(Exception): pass
+class ControlWException(Exception): pass
+class TabException(Exception): pass
+
 # TODO: rewrite as a generator
 class Interactive(object):
     def __init__(self, initial_string=None):
@@ -60,11 +62,13 @@ class Interactive(object):
         self.h = ''
         self.interpreter_got_recreated = True # alters the prompt to !
         self.subsource = getch
-        self.xi = XInterpreter(self)
+        self.xi = XContext(self, stream=True)
         self.display_error = None
 
+    def __iter__(self): return self
+
     def main(self):
-        self.xi.eval()
+        self.xi.try_eval()
 
     def prompt(self): return '! ' if self.interpreter_got_recreated else '> '
 
@@ -72,7 +76,7 @@ class Interactive(object):
         if self.s:
             self.h, c, self.s = self.h + self.s[0], self.s[0], self.s[1:]
             return c
-# TODO: print only in printstate
+        # TODO: print only in printstate
         print '\n' * 24
         printstate(self.xi)
         if self.display_error is None:
@@ -83,7 +87,7 @@ class Interactive(object):
         self.interpreter_got_recreated = False
         self.display_error = None
         c = self.subsource()
-        if ord(c) == 9: raise TabException()
+#        if ord(c) == 9: raise TabException()
         if ord(c) == 23: raise ControlWException()
         if ord(c) == 13: c = '\n'
         if ord(c) == 27: sys.exit(0)
@@ -97,31 +101,33 @@ def shorten(s, maxlen):
     return s[:maxlen - 3] + '..' + s[-1]
 
 def printstate(b, shorten_to=80, stars=1):
-    for f in b.chain + [b.currently_mutating]:
-        if isinstance(f, XInterpreter):
-            printstate(f, shorten_to, stars=stars+1)
-        s = str(f)
-        if not s: s = '...'
-        if f == b.currently_mutating and isinstance(b, XInterpreter): continue
-        symbol = '*' if f != b.currently_mutating else '.'
-        highlighted = f == b.chain[-1]
-        line_len = shorten_to - stars - 1 - (3 if highlighted else 0)
-        line = symbol * stars + ' ' + shorten(s, line_len)
-        if highlighted:
-            line += (' ' * (shorten_to - len(line) - 3) + ' <-')
-        print colored(line, style='bright') if highlighted else line
+    print b['wrapped']['state']
+#    print b['state']
+#    for f in b.chain:
+#        if isinstance(f, XInterpreter):
+#            printstate(f, shorten_to, stars=stars+1)
+#        s = str(f)
+#        if not s: s = '...'
+#        if f == b.currently_mutating and isinstance(b, XInterpreter): continue
+#        symbol = '*' if f != b.currently_mutating else '.'
+#        highlighted = f == b.chain[-1]
+#        line_len = shorten_to - stars - 1 - (3 if highlighted else 0)
+#        line = symbol * stars + ' ' + shorten(s, line_len)
+#        if highlighted:
+#            line += (' ' * (shorten_to - len(line) - 3) + ' <-')
+#        print colored(line, style='bright') if highlighted else line
 #    print '.' * stars, b.currently_mutating
 
-INITIAL_S = '('
+INITIAL_S = ''
 
 def main():
     argv = list(sys.argv[1:])
 
     syntax_prefix, syntax_postfix = '', ''
-    for s in argv:
-        if s.startswith('+'):
-            syntax_prefix += '(xslang (# syntax) (# enable) (# %s) \n' % s[1:]
-            syntax_postfix += ')'
+#    for s in argv:
+#        if s.startswith('+'):
+#            syntax_prefix += '(xslang (# syntax) (# enable) (# %s) \n' % s[1:]
+#            syntax_postfix += ')'
     for s in argv:
         if s.startswith('+'):
             argv.remove(s)
@@ -140,31 +146,31 @@ def main():
         except ControlWException, e:
             s = i.h.rstrip().rsplit(' ', 1)[0] + ' '
             display_error = None
-        except TabException, e:
-            display_error = None
-            s = i.h
-            choices = i.xi.context.keys()
-            curr = None
-            if i.xi.chain: curr = i.xi.chain[:-1]
-            if i.xi.currently_mutating: curr = i.xi.currently_mutating
-            while isinstance(curr, XInterpreter):
-                if not curr.currently_mutating is None:
-                    curr = curr.currently_mutating; continue
-            if curr:
-                if isinstance(curr, XDictionaryObject):
-                    choices = curr.keys() + choices
-            prefix = s.split()[-1].split('(')[-1].split(')')[-1]
-            filtered = [c for c in choices if c.startswith(prefix)]
-            if len(filtered) == 1:
-                s += filtered[0][len(prefix):] + ' '
-            else:
-                display_error = ': ' + ' '.join(sorted(choices))
-        except XException, e:
+#        except TabException, e:
+#            display_error = None
+#            s = i.h
+#            choices = i.xi.context.keys()
+#            curr = None
+#            if i.xi.chain: curr = i.xi.chain[:-1]
+#            if i.xi.currently_mutating: curr = i.xi.currently_mutating
+#            while isinstance(curr, XInterpreter):
+#                if not curr.currently_mutating is None:
+#                    curr = curr.currently_mutating; continue
+#            if curr:
+#                if isinstance(curr, XDictionaryObject):
+#                    choices = curr.keys() + choices
+#            prefix = s.split()[-1].split('(')[-1].split(')')[-1]
+#            filtered = [c for c in choices if c.startswith(prefix)]
+#            if len(filtered) == 1:
+#                s += filtered[0][len(prefix):] + ' '
+#            else:
+#                display_error = ': ' + ' '.join(sorted(choices))
+        except XError, e:
             display_error = 'X ' + str(e)
             s = i.h[:-1]
-        except Exception, e:
-            display_error = 'E ' + str(e)
-            s = i.h[:-1]
+#        except Exception, e:
+#            display_error = 'E ' + str(e)
+#            s = i.h[:-1]
 
 if __name__ == '__main__': main()
 

@@ -16,734 +16,397 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
+# The differences:
+# XSomething : XObject (dict-based, consumes strings and lookups them)
+# XSomething : XClosure (a brace, a code block, a function, consumes anything)
+# XClosure: has input parameters
+# XClosure: collects input parameters one by one and stores them inside
+# XClosure: parameters are named and can have default values
+# function: an XClosure that started consuming parameters and will eval after
+#       consuming all
+# Binding arguments to a closure: {x y z| z y x} x_bound_value
+
+# Everything is immutable!
+# Everything (except funcs) is obtained by extending the XObject
+# There should be a way to pass a parameter to a closure out-of-order
+# xslang.function.pass_named_param func.__closure__ .paramname paramval
+
+# character-based streams
+
 ### Definition of the basics ###
 
-class XObject(object):
-    def __str__(self): return 'X<' + object.__str__(self) + '>'
+class XError(Exception):
+    """ XSLang code execution error """
 
-class XException(Exception): pass
+class XObject(dict):
+    """ XSLang base type for dictionary-based objects """
+    def __str__(self):
+        if '__name__' in self:
+            return 'X<%s>' % unbox(self['__name__'])
+        if '__string__' in self: return unbox(self['__string__'])
+        # TEMP hack
+        if '__py_val__' in self and '__py_type__' in self:
+            if self['__py_type__'] == 'none': return 'X<none>'
+            if self['__py_type__'] == 'string':
+                return "X<'%s'>" % self['__py_val__']
+            return 'X<(%s:%s)>' % (self['__py_type__'], self['__py_val__'])
+        return 'X<:%s:>' % ' '.join(self.keys())
+    def __call__(self, arg, context=None): # functions override this
+        #print 'LOOKUP', self, arg
+        #if '__py_val__' in self:
+            #print 'LOOKUP in primitive!:', unbox(self), unbox(arg)
+        if not '__py_type__' in arg or arg['__py_type__'] != 'string':
+            raise XError('The key is not a string "%s" <- "%s"' % (self, arg))
+        return self[unbox(arg)]
+    def extend(self, name, arg):
+        new_dic = self.copy()
+        new_dic[name] = arg
+        new = self.__class__(new_dic)
+        if any(not k in new for k in self.keys()): raise XError('Bad extension')
+        return new
+    def ext(self, *a, **kwa):
+        new_dic = self.copy()
+        for dic in a: new_dic.update(dic)
+        new_dic.update(kwa)
+        new = self.__class__(new_dic)
+        if any(not k in new for k in self.keys()): raise XError('Bad extension')
+        return new
+    def __setattr__(self, n, v):
+        raise XError('Setting attribute %s.%s is a bad idea' % (type(self), n))
 
-class XBool(XObject): pass
-class Xtrue(XBool):
-    def __str__(self): return 'X<true>'
-class Xfalse(XBool):
-    def __str__(self): return 'X<false>'
-class Xnone(XObject):
-    def __str__(self): return 'X<none>'
+Xobject = XObject()
 
-#class XRawCode(object):
-#    def __init__(self, s): self.s = s
-#    def __add__(self, s): return XRawCode(self.s + s)
-#    def __str__(self): return "X<RawCode:'%s'>" % self.s
-#    def code(self): return self.s
+_gen_type = lambda type_name, def_val: Xobject.ext({
+        'base':  Xobject.ext(__py_type__=type_name, __py_val__=def_val)
+})
+
+xslang = Xobject.ext({
+    'type': Xobject.ext({
+        'bool': Xobject.ext({
+            'base':     Xobject.ext(__py_type__='bool'),
+            'true':     Xobject.ext(__py_type__='bool', __py_val__=True),
+            'false':    Xobject.ext(__py_type__='bool', __py_val__=True),
+         }),
+        'int':      _gen_type('int', 0),
+        'none':     _gen_type('none', None),
+        'string':   _gen_type('string', ''),
+        'list':     _gen_type('list', list())
+    })
+})
+
+### Primitive type (which maps to a simple python type) ###
+
+def box(pyval):
+    # Needs to actually extend existing prototypes (with methods)
+    # not XObject
+    if isinstance(pyval, bool):     base = 'bool'
+    elif isinstance(pyval, int):    base = 'int'
+    elif pyval is None:             base = 'none'
+    elif isinstance(pyval, str):    base = 'string'
+    elif isinstance(pyval, tuple):  base = 'list'
+    else: raise XError('How to box type %s?' % type(pyval))
+    base = xslang['type'][base]['base']
+    return base.extend('__py_val__', pyval)
+
+def unbox(Xval):
+    if not '__py_type__' in Xval or not '__py_val__' in Xval:
+        raise XError('How to unbox %s?' % Xval)
+    return Xval['__py_val__']
+
+### Nice names for packages ###
+
+xslang = xslang.extend('__name__', box('xslang root package'))
+xslang = xslang.extend('type',
+        xslang['type'].extend('__name__', box('xslang.type package'))
+)
 
 ### Streaming ###
 
 def stream_str(string):
-    if not string: return
     while True:
+        if not string: return
         c, string = string[0], string[1:]
         yield c
-        if not string: return
 
-def stream_read_until_closing_brace(tstream, opened=1):
+def stream_read_single(stream):
+    """
+    Converts '(xslang operator) ident') to a stream of
+    ('(', 'xslang', ' ', 'operator', ')', ' ', 'ident')
+    """
+    s = ''
+    for c in stream:
+        s += c
+        if s:
+            if s[-1] == '(' or s[-1].isspace():
+                if s[:-1]: yield s[:-1]
+                yield s[-1]; s = ''
+        if s:
+            if s[-1] == ')': yield s[:-1]; yield s[-1]; s = ''
+    if s: yield s
+
+def stream_read_piece(stream):
+    """
+    Converts '(xslang operator) ident') to a stream of
+    ('(', 'xslang', 'operator', ')', 'ident')
+    """
+    for t in stream_read_single(stream):
+        if not t.isspace(): yield t
+
+def stream_read_until_closing_brace(stream, opened=1):
     s, b = '', opened
-    while b > 0 or not ('(' in s or ')' in s):
-        c = tstream.next(); s += c
+    for c in stream:
+        s += c
         if c == '(': b += 1
-        elif c == ')': b -= 1
-        if c.isspace() or c in '()':
-            if b == 0:
-                return s[:-1]
-    return s[:-1]
-
-def stream_read_word_or_brace(stream):
-    """Converts '((xslang operator) ident)') to
-       ['(', '(', 'xslang', ' ', 'operator', '', ')', ' ', 'ident', '', ')']"""
-    s = ''
-    while True:
-        try:
-            s += stream.next()
-            if s:
-                if s[-1] == '(' or s[-1].isspace():
-                    if s[:-1]: yield s[:-1]
-                    yield s[-1]; s = ''
-            if s:
-                if s[-1] == ')': yield s[:-1]; yield ''; yield s[-1]; s = ''
-        except StopIteration:
-            yield s
-            raise StopIteration
-
-def stream_read_single(tstream, token_stream=False):
-    s = ''
-    while not s or s.isspace():
-        s = tstream.next()
-        if not s:
-            if not token_stream: return None
-    if s == '(': s = stream_read_until_closing_brace(tstream)
-    if token_stream:
-        ts = stream_read_word_or_brace(stream_str(s))
-        return ts
+        elif c == ')':
+            b -= 1
+            if not b: return s
+        if not b and s and not s.isspace() and c.isspace(): return s[:-1]
+    if b: raise XError('Unbalanced braces: "%s"' % s)
     return s
 
-### The interpreter ###
+flatten = lambda s, *a: ''.join(list(
+    stream_read_until_closing_brace(stream_str(s), *a)))
+assert flatten('abc', 0) == 'abc'
+assert flatten('()', 0) == '()'
+assert flatten('(abc) xef)', 0) == '(abc)'
+assert flatten('(abc) xef)', 1) == '(abc) xef)'
+assert flatten(' (abc) (def)', 0) == ' (abc)'
 
-class XInterpreter(object):
-    def __init__(self, stream, root_obj=None, root_obj_name='xslang', \
-                no_first_brace=False, parent=None):
-        self.context = {root_obj_name: root_obj or xslang_rootobj}
-        self.context['#'] = XStringLiteralMutator()
-        self.token_stream = stream_read_word_or_brace(
-                stream_str('(' + stream + ')')
-                if isinstance(stream, str) else stream
-        )
-        self.parent = parent # A parent brace used for context lookups
-        self.no_first_brace = no_first_brace
-        self.chain = [] # For dirty introspection
-        self.currently_mutating = None # For dirty introspection
+### Arguments collector: the closure, the context ###
 
-    def __getitem__(self, n, maxdepth=-1):
-        if n in self.context: return self.context[n]
-        if not self.parent: raise XException(n + ' not found!')
-        if maxdepth == 0: raise XException(n + ' not found here!')
-        return self.parent.__getitem__(n, maxdepth - 1)
+class XContext(XObject):
+    """
+    A closure, a context, an arg collector.
+    It wraps an evalable (a XPyFunc or an XInterpreter).
+    Is immutable.
 
-    def __contains__(self, n):
-        if n in self.context: return True
-        if not self.parent: return False
-        return n in self.parent
+    It collects all necessary argument values
+    and evaluates on consuming the last one.
 
-    def eval(self):
-        if not self.no_first_brace:
-           if self.token_stream.next() != '(': raise XException('No (')
-        while True:
-            n = self.token_stream.next()
-            if n.isspace() or n == '': continue
-            elif n == '(':
-                n = XInterpreter(self.token_stream,
-                                 no_first_brace=True, parent=self)
-                self.currently_mutating = n
-                n = n.eval()
-            elif n == ')':
-                if self.chain: return self.chain[-1]
-                else: return Xnone()
-            if (isinstance(n, str)):
-                if n in self: n = self[n]
-                else: raise XException("'%s' not found in current context!" % n)
-                #else: n = XRawCode(n)
-            assert isinstance(n, XObject)
-            while '__mutate__' in dir(n):
-                transformed = n.__mutate__(interpreter=self)
-                if transformed is None: break # Cancel transformation
-                else: n = transformed
-            assert isinstance(n, XObject)
-            if not self.chain: self.chain.append(n)
-            else:
-                self.chain.append(self.chain[-1](self, n))
-                while '__mutate__' in dir(self.chain[-1]):
-                    self.currently_mutating = self.chain[-1]
-                    transformed = self.currently_mutating.__mutate__(interpreter=self)
-                    if transformed is None: break # Cancel transformation
-                    else: self.chain[-1] = transformed
-            assert isinstance(self.chain[-1], XObject)
-            self.currently_mutating = None
+    It can collect args with different lookup policies:
+        1) require a parameter to be provided with __call__
+        2) lookup parameter in current context
+        3) have a default (bound) value of a parameter
+    One day { in1 in2 ^outer bound_x=x | ... } will mean that
+        1) bound_x gets bound at the moment of context definition
+            self.args_bound['bound_x'] = x  (like inherited from parent context)
+        2) outer will be looked up in another parent context
+            upon evaluating the body
+        3-4) in1 and in2 will be consumed with __call__
+    After that the function will evaluate,
+    to prevent it require one more argument and pass it later.
+    """
 
-### Helper decorators for standard library ###
-
-def XFunction(name=None, converter=None):
-    def transform(func):
-        class XFunc(XObject):
-            def __call__(self, interpreter, arg, *a, **kwa):
-                if not converter is None: arg = converter(arg)
-                return func(interpreter, arg, *a, **kwa)
-            def __str__(self): return 'X<' + name + '>' \
-                    if name is not None else XObject.__str__(self)
-        return XFunc()
-    return transform
-
-def XFunction_takes_additional_arg(arg_name, converter=None):
-    def transform(func):
-        @XFunction('%s %s=(???)' % (str(func), arg_name))
-        def XArgInjector(interpreter, arg_, **kwa_):
-            arg = arg_
-            if not converter is None: arg = converter(arg)
-            @XFunction('%s %s=(%s)' % (func, arg_name, arg_))
-            def ProxyFunc(*a, **kwa):
-                kwa.update(kwa_)
-                kwa[arg_name] = arg
-                return func(*a, **kwa)
-            return ProxyFunc
-        return XArgInjector
-    return transform
-
-def XFunction_python(s):
-    if not ' ' in s.split('(')[0]: s = 'any ' + s # Add 'any' return type
-    type_, r = s.split(' ', 1); name, r = s.split('(', 1)
-    sign_in, body = r.split(')', 1); params = sign_in.split(' ')
-    params = [(p, 'any') if not ':' in p else p.split(':', 1) for p in params]
-    s = ''
-    assert len(params) > 0
-    for pn, pt in params[:-1]:
-        s += "XFunction_takes_additional_arg('%s', converter=%s)(\n" % \
-                (pn, 'Xc_' + pt)
-    pn, pt = params[-1]
-    s += "XFunction('%s', converter=%s)(\n" % (name, 'Xc_' + pt)
-    s += "lambda interpreter, %s" % params[-1][0]
-    s += ''.join(', %s=None' % p[0] for p in params[:-1])
-    s += ': Xc_%s( %s )' % (type_, body) +  ')' * len(params)
-    return eval(s)
-
-def Xc_str(s):
-    if isinstance(s, Xstring): return s.str()
-    raise XException('Not an Xstring: ' + str(s))
-
-def Xc_int(i):
-    if isinstance(i, Xint): return i.int()
-    raise XException('Not an Xint: ' + str(i))
-
-def Xc_tuple(t):
-    if isinstance(t, Xtuple): return t.tuple()
-    raise XException('Not an Xtuple: ' + str(t))
-
-def Xc_bool(b):
-    if isinstance(b, Xtrue): return True
-    if isinstance(b, Xfalse): return False
-    raise XException('Not an Xbool: ' + str(b))
-
-def Xc_Xstring(s):
-    if not isinstance(s, str): raise XException('Not an str: ' + str(s))
-    return Xstring(s)
-
-def Xc_Xint(i):
-    if not isinstance(i, int): raise XException('Not an int: ' + str(i))
-    return Xint(i)
-
-def Xc_Xtuple(t):
-    if not isinstance(t, tuple): raise XException('Not a tuple: ' + str(t))
-    return Xtuple(t)
-
-def Xc_Xbool(b):
-    return Xtrue() if b else Xfalse()
-    raise XException('Not an bool: ' + str(b))
-
-Xc_any = lambda x: x
-
-### Standard library ###
-
-class XStringLiteralMutator(XObject):
-    def __mutate__(self, interpreter):
-        return Xstring(stream_read_single(interpreter.token_stream))
-    def __str__(self): return 'X<"???">'
-
-@XFunction('ident')
-def Xident(interpreter, arg): return arg
-@XFunction('ignore')
-def Xignore(interpreter, arg): return Xident
-
-@XFunction('prefix')
-def Xprefix(interpreter, func):
-    return XPrefixMutator(func)
-
-class XPrefixMutator(XObject):
-    def __init__(self, func): self.func = func
-    def __mutate__(self, interpreter):
-        if not interpreter.parent: return None
-        if not interpreter.parent.chain: return None
-        return self.func(interpreter, interpreter.parent.chain.pop())
-    def __str__(self): return 'X<ReverseMutator func=%s>' % self.func
-
-class XDictionaryObject(XObject, dict):
-    def __call__(self, interpreter, arg):
-        arg = Xc_str(arg)
-        if not arg in self: raise XException('"%s" not found!' % arg)
-        return self[arg]
-    def __str__(self): return 'XDICT<' + ','.join(sorted(self.keys())) + '>'
-
-class XBoundMethodMutator(XObject):
-    def __init__(self, func, obj):
-        self.func, self.obj = func, obj
-    def __mutate__(self, interpreter):
-        return self.func(interpreter, self.obj)
-
-def XFunctionBind(func, obj, name):
-    obj[name] = XBoundMethodMutator(func, obj)
-
-@XFunction_takes_additional_arg('dict_obj')
-@XFunction_takes_additional_arg('name', converter=Xc_str)
-@XFunction('internals.bind')
-def Xbind(interpreter, func, name=None, dict_obj=None):
-    XFunctionBind(func, dict_obj, name)
-    return Xident
-
-@XFunction('internals.empty')
-def Xempty(interpreter, unused):
-    return XDictionaryObject()
-
-@XFunction_takes_additional_arg('dict_obj')
-@XFunction_takes_additional_arg('name', converter=Xc_str)
-@XFunction('internals.inject')
-def Xinject(interpreter, obj, name=None, dict_obj=None):
-    dict_obj[name] = obj
-    return Xident
-
-@XFunction('internals.pyfunc', converter=Xc_str)
-def Xpyfunc(interpreter, body):
-    return XFunction_python(body)
-
-class Xstring(XDictionaryObject):
-    def __init__(self, s):
-        self._s = s
-        self['concatenate'] = Xstring_concatenate(None, self)
-        self['equals'] = Xstring_equals(None, self)
-        self['join'] = Xstring_join(None, self)
-        self['length'] = Xstring_length(None, self)
-        self['set'] = Xset(None, self)
-    def __str__(self): return 'X<\'' + self._s + '\'>'
-    def str(self): return self._s
-
-@XFunction_takes_additional_arg('varname', converter=Xc_str)
-@XFunction('context.set')
-def Xset(interpreter, arg, varname=None):
-    interpreter.context[varname] = arg
-    return Xident
-Xget = XFunction_python('context.get(varname:str) interpreter[varname]')
-
-@XFunction_takes_additional_arg('varname', converter=Xc_str)
-@XFunction_takes_additional_arg('body', converter=Xc_str)
-@XFunction('function.of')
-def XfunctionOf(interpreter, arg, varname=None, body=None):
-    interpreter.context[varname] = arg
-    xi =  XInterpreter(body, parent=interpreter)
-    return xi.eval()
-
-@XFunction_takes_additional_arg('varname1', converter=Xc_str)
-@XFunction_takes_additional_arg('varname2', converter=Xc_str)
-@XFunction('function.dualarg', converter=Xc_str)
-def Xdualarg(interpreter, body, varname1=None, varname2=None):
-    @XFunction_takes_additional_arg('val1')
-    @XFunction('function.of.dualarg')
-    def func(interpreter, val2, val1=None):
-        xi = XInterpreter(body, parent=interpreter)
-        xi.context[varname1] = val1
-        xi.context[varname2] = val2
-        return xi.eval()
-    return func
-
-Xternary = XFunction_python(
-    'operator.ternary(cond:bool if_v else_v) if_v if cond else else_v')
-
-Xif = XFunction_python('operator.if(cond:bool if_body:str else_body:str) ' +
-    'XInterpreter(if_body if cond else else_body, parent=interpreter).eval()')
-
-Xlazy = XFunction_python('operator.lazy(delay:int mutator_body:str) ' +
-    'XLazyMutator(mutator_body, delay)')
-
-@XFunction('operator.abort', converter=Xc_str)
-def Xabort(interpreter, reason): raise XException('Aborted: %s' % reason)
-
-class XLazyMutator(XObject):
-    def __init__(self, wrapped, delay=1):
-        self.wrapped, self.delay = wrapped, delay
-    def __mutate__(self, interpreter):
-        if self.delay > 0: self.delay -= 1; return
-        return XInterpreter(self.wrapped, parent=interpreter).eval()
-    def __str__(self): return 'X<LazyMutator %s>' % self.wrapped
-
-class Xint(XDictionaryObject):
-    def __init__(self, i):
-        self._i = i
-        self['add'] = Xint_add(None, self)
-        self['equals'] = Xint_equals(None, self)
-        XFunctionBind(Xint_string, self, 'string')
-        self['subtract'] = Xint_subtract(None, self)
-        self['to'] = Xint_to(None, self)
-    def __str__(self): return 'X<int:%d>' % self._i
-    def int(self): return self._i
-
-Xint_new        = XFunction_python('Xint int.new(string:str) int(string)')
-Xint_add        = XFunction_python('Xint int.add(a:int b:int) a + b')
-Xint_equals     = XFunction_python('Xbool int.equals(a:int b:int) a == b')
-Xint_string     = XFunction_python('Xstring int.string(a:int) str(a)')
-Xint_subtract   = XFunction_python('Xint int.subtract(a:int b:int) a - b')
-Xint_to         = XFunction_python('Xtuple int.subtract(a:int b:int) '
-                  'tuple(Xc_Xint(i) for i in range(a, b, 1 if a < b else -1))')
-
-@XFunction_takes_additional_arg('a', converter=Xc_str)
-@XFunction('string.concatenate', converter=Xc_str)
-def Xstring_concatenate(intepreter, b, a=None): return Xstring(a + b)
-
-Xstring_concatenate = XFunction_python(
-    'Xstring string.concatenate(a:str b:str) a + b')
-Xstring_equals  = XFunction_python('Xbool string.equals(a:str b:str) a == b')
-Xstring_join    = XFunction_python(
-    'Xstring string.join(s:str t:tuple) s.join(Xc_str(x) for x in t)')
-Xstring_length  = XFunction_python('Xint string.equals(s:str) len(s)')
-
-class Xtuple(XDictionaryObject):
-    def __init__(self, t):
-        self._t = t
-        self['add'] = Xtuple_add(None, self)
-        self['get'] = Xtuple_get(None, self)
-        self['equals'] = Xtuple_equals(None, self)
-        self['filter'] = Xtuple_filter(None, self)
-        self['length'] = Xtuple_length(None, self)
-        self['map'] = Xtuple_map(None, self)
-        self['reduce'] = Xtuple_reduce(None, self)
-    def __str__(self): return 'X<%s>' % ','.join(str(x) for x in self._t)
-    def tuple(self): return self._t
-
-@XFunction_takes_additional_arg('t', converter=Xc_tuple)
-@XFunction('tuple.add')
-def Xtuple_add(intepreter, e, t=None): return Xtuple(t + tuple([e]))
-
-@XFunction_takes_additional_arg('t', converter=Xc_tuple)
-@XFunction('tuple.get', converter=Xc_int)
-def Xtuple_get(intepreter, i, t=None):
-    if not (i >= 0 and i < len(t)):
-        raise XException('Out of bounds: %d/%d' % (i, len(t)))
-    return t[i]
-
-@XFunction_takes_additional_arg('t1', converter=Xc_tuple)
-@XFunction('tuple.equals', converter=Xc_tuple)
-def Xtuple_equals(intepreter, t2, t1=None):
-    def compare(e1, e2):
-        if e1 == e2: return True
-        if type(e1) != type(e2): return False
-        if not (isinstance(e1, XDictionaryObject) and
-                isinstance(e2, XDictionaryObject)): return False
-        if not 'equals' in e1: return False
-        return Xc_bool(e1['equals'](None, e2))
-    if len(t1) != len(t2): return Xc_Xbool(False)
-    return Xc_Xbool(all(compare(e1, e2) for e1, e2 in zip(t1, t2)))
-
-@XFunction('tuple.length', converter=Xc_tuple)
-def Xtuple_length(intepreter, t): return Xc_Xint(len(t))
-
-@XFunction_takes_additional_arg('t', converter=Xc_tuple)
-@XFunction('tuple.map')
-def Xtuple_map(i, func, t=None):
-    interpreter = i
-    return Xtuple(tuple(func(interpreter, x) for x in t))
-
-@XFunction_takes_additional_arg('t', converter=Xc_tuple)
-@XFunction('tuple.filter')
-def Xtuple_filter(i, func, t=None):
-    interpreter = i
-    return Xtuple(tuple(x for x in t if Xc_bool(func(interpreter, x))))
-
-@XFunction_takes_additional_arg('t', converter=Xc_tuple)
-@XFunction('tuple.reduce')
-def Xtuple_reduce(i, func, t=None):
-    return reduce(lambda acc, x: func(i, acc)(i, x), t)
-
-
-### Syntax transformations ###
-
-def stream_detokenize_stream(tstream):
-    while True:
-        s = tstream.next()
-        if not s: continue
-        while s:
-            c, s = s[0], s[1:]
-            yield c
-
-def stream_tokens_of_a_brace(tstream, opened=False):
-    char_stream = stream_detokenize_stream(tstream)
-    if not opened: assert(char_stream.next() == '(')
-    s = stream_read_until_closing_brace(char_stream, 1 if not opened else 0)
-    return stream_read_word_or_brace(stream_str(s))
-
-def tokens_forming_a_literal(l):
-    return (' ', '(', '#', ' ', '(', l, '', ')', '', ')')
-
-def tokens_walking_a_path(*p):
-    r = ('(', 'xslang', ' ')
-    for t in p: r += tokens_forming_a_literal(t)
-    return r + (' ',)
-
-def dotty_literals(stream):
-    while True:
-        t = stream.next()
-        if not '.' in t: yield t; continue
-        if t == '.':
-            inside = ''.join(stream_tokens_of_a_brace(stream))
-            for z in tokens_forming_a_literal(inside): yield z
-            continue
-        if '.' in t and not t.startswith('.'):
-            yield '('
-            p, t = t.split('.', 1)
-            t = '.' + t
-            yield p; yield ' '
-            while t.startswith('.') and '.' in t[1:]:
-                p, t = t[1:].split('.', 1)
-                t = '.' + t
-                for z in tokens_forming_a_literal(p): yield z
-            if t:
-                for z in tokens_forming_a_literal(t[1:]): yield z
-            yield ''; yield ')'
-            continue
-        for z in tokens_forming_a_literal(t[1:]): yield z
-
-def surround(what, with_=' '):
-    # TODO: reimplement with a simplistic replace, left and right paddings
-    def surr(tstream):
-        for t in tstream:
-            if not what in t: yield t
-            else:
-                l = []
-                while what in t:
-                    a, t = t.split(what, 1)
-                    l += [a, with_, what, with_]
-                for z in l: yield z
-                if t: yield t
-    return surr
-
-def composition(ti, *ts):
-    def composed(stream):
-        f = ti(stream)
-        for t in ts: f = t(f)
-        return f
-    return composed
-
-def replace_(c, pairs):
-    for what, with_ in pairs:
-        c = c.replace(what, with_)
-    return c
-
-def creplace(*pairs):
-    def sur(cstream):
-        for c in cstream:
-            for z in replace_(c, pairs): yield z
-    return composition(stream_detokenize_stream, sur, stream_read_word_or_brace)
-
-def curly_braced_functions_(tstream):
-    while True:
-        t = tstream.next()
-        if t != '{': yield t
+    def __init__(self, wrapped, argnames=None, argvals=None, stream=False):
+        if wrapped.__class__ == dict:
+            XObject.__init__(self, wrapped)
         else:
-            for z in curly_braced_functions_inside_a_brace(tstream): yield z
-def curly_braced_functions_inside_a_brace(tstream):
-    s = ''
-    while not s or s[-1] not in '|}': s += tstream.next()
-    s, c = s[:-1], s[-1]
-    argnames = s.split()
-    if c == '|': # We have a {x y | z}-like block, yield function.of...
-        for argname in argnames:
-            for z in (tokens_walking_a_path('function', 'of', argname) +
-                    (' ', '(', '#', ' ', '(')): yield z
-        s = ''
-        while True:
-            s += tstream.next()
-            if s.count('}') - s.count('{') == 1: break
-        s = s[:-1]
-    elif c == '}': # We have a {x y z}-like block, yield a literal
-        for z in '(', '#', ' ', '(': yield z
-        s = s
+            if isinstance(wrapped, str) or stream:
+                #print 'WRAPPING', wrapped
+                wrapped = XInterpreter(wrapped)
+            self['wrapped'] = wrapped
+            self['__py_arg_names__'] = argnames if argnames else []
+            self['__py_arg_vals__'] = argvals if argvals else {}
+            self['xslang'] = xslang
+            self['__name__'] = box('XContext "%s"' % self['wrapped'])
+        # Let's evaluate and cache this
+        self['valless'] = list(a for a in self['__py_arg_names__']
+                               if not a in self['__py_arg_vals__'])
+        #print 'XContextNEW', n, self['valless']
+        #print 'XContextNEW', type(self['wrapped']), self['valless'], self.keys()
+        #print 'XContextNEW', self['__py_arg_names__'], self['__py_arg_vals__']
+        if self['wrapped'].__class__ == dict: raise XError('PANIC!')
 
-    int_tstream = stream_read_word_or_brace(stream_str(s))
-    for t in int_tstream:
-        if t == '}': break
-        elif t == '{':
-            for z in curly_braced_functions_inside_a_brace(int_tstream):
-                yield z
-        else: yield t
+    @staticmethod
+    def create(*a, **kwa):
+        n = XContext(*a, **kwa)
+        return n.try_eval()
 
-    if c == '|':
-        for z in ('', ')') * (len(argnames) * 3): yield z
-    elif c == '}':
-        for z in ('', ')') * 2: yield z
+    def with_addn_arg(self, argn, def_val=None):
+        new_argvals = self.argvals.copy()
+        if not def_val is None: new_argvals[argn] = def_val
+        return self.ext({
+            '__py_arg_names__': self.argnames + (argn,),
+            '__py_arg_vals__': new_argvals,
+        })
 
-curly_braced_functions = composition(
-    surround('{'), surround('}'), surround('|'), curly_braced_functions_
-)
+    def with_addn_val(self, val, argn=None, context=None):
+        if argn is None: argn = self['valless'][0]
+        new_argvals = self['__py_arg_vals__'].copy()
+        new_argvals[argn] = val
+        new_self = self.ext({
+            '__py_arg_names__': self['__py_arg_names__'],
+            '__py_arg_vals__': new_argvals,
+        })
+        #print 'NEW valless', new_self['valless']
+        return new_self.try_eval()
 
-def tokens_forming_an_int(int_str):
-    return (tokens_walking_a_path('type', 'int', 'new', int_str) + (')',))
+    def __call__(self, v, context=None):
+        #print 'valless', self['wrapped'], self['valless'], '<-', v
+        if not self['valless']:
+            raise XError('already not valless! (%s <- %s)' % (self, v))
+        #print 'collected val', self, v
+        return self.with_addn_val(v, context=None)
 
-def int_auto(stream):
-    while True:
-        t = stream.next()
-        if t:
-            if t.isdigit() or (t[0] == '-' and t[1:].isdigit()):
-                for z in tokens_forming_an_int(t): yield z
-                continue
-        yield t
+    def try_eval(self):
+        if not self['valless']:
+            return self['wrapped'].eval(
+                context=self.ext(self['__py_arg_vals__']))
+        return self
 
-def tuple_auto_empties(stream):
-    no_read = False
-    while True:
-        if not no_read: t = stream.next()
-        no_read = False
-        if t == '[]':
-            for z in tokens_walking_a_path('type', 'tuple', 'empty'):
-                yield z
-            yield ''; yield ')'
-        elif t == '[':
-            l = [t, stream.next()]
-            while not l[-1] or l[-1].isspace(): l.append(stream.next())
-            if l[-1] == ']':
-                # Empty tuple
-                for z in tokens_walking_a_path('type', 'tuple', 'empty'):
-                    yield z
-                yield ''; yield ')'
-            else:
-                if l[-1] in ('[', '[]'):
-                    t = l[-1]
-                    del l[-1]
-                    no_read = True
-                for z in l: yield z
-        else: yield t
 
-tuple_auto_creplace = creplace(
-    ('[', ' (xslang (# type) (# tuple) (# empty) (# add) ('),
-    (',', ') (# add) ('),
-    (']', ')) '),
-)
-tuple_auto = composition(
-    surround('['), surround(']'),
-    tuple_auto_empties, tuple_auto_creplace
-)
+#    def parent_lookup(self, argname, context):
+#        if context and argname in self.args_lookup:
+#                if argname in context: return True
+#        return False
 
-def quoted_strings_encode_(cstream):
-    while True:
-        t = cstream.next()
-        if t == '\'':
-            s = ''
-            while (not s.endswith('\'') or s.endswith('\\\'')) and not \
-                    s.endswith('\\\\\''):
-                s += cstream.next()
-            yield '\''
-            for z in s[:-1].encode('base64'): yield z
-            yield '\''
-        else: yield t
-quoted_strings_encode = composition(
-    stream_detokenize_stream, quoted_strings_encode_, stream_read_word_or_brace)
 
-def quoted_strings_decode_(cstream):
-    while True:
-        t = cstream.next()
-        if t == '\'':
-            s = ''
-            while not s.endswith('\''): s += cstream.next()
-            s = s.decode('base64')
-            s = s.replace('\\\'', '\'')
-            s = s.replace('\\\\', '\\')
-            for z in tokens_forming_a_literal(s): yield z
-        else: yield t
-quoted_strings_decode = composition(
-    stream_detokenize_stream, quoted_strings_decode_, stream_read_word_or_brace)
+### The main thing: the interpreter ###
 
-prefix_operator = creplace(('~', ' (xslang (# operator) (# prefix)) '))
+def box_unknown(val):
+    #print 'BOX UNKNOWN "%s"' % val
+    return box(val)
 
-rich = composition(
-    quoted_strings_encode,
-    prefix_operator,
-    tuple_auto, curly_braced_functions, int_auto, dotty_literals,
-    quoted_strings_decode,
-)
+class XInterpreter(XObject):
+    """
+    Is not immutable, has state. Thus it is dirty and non-reusable.
+    Wraps "f arg1 (...) arg2 arg3" xslang code into an evalable.
 
-TRANSFORMATIONS = {
-    'dotty_literals': dotty_literals,
-    'curly_braced_functions': curly_braced_functions,
-    'int_auto': int_auto,
-    'tuple_auto': tuple_auto,
-    'rich': rich,
-}
+    It parses and executes the xslang code stream.
 
-def expand(string, transformation_name='rich'):
-    tr = TRANSFORMATIONS[transformation_name]
-    return '$%s$' % ''.join(tr(stream_read_word_or_brace(stream_str(string))))
+    Unknown tokens will be treated in a custom configurable manner:
+        a custom function will decide whether to wrap into string, error out,
+        do a recursive parent context lookup or whatever else.
+    """
 
-@XFunction('syntax.enable')
-def XsyntaxEnable(interpreter, transformation_name):
-    transformation_name = Xc_str(transformation_name)
-    transform = TRANSFORMATIONS[transformation_name]
-    interpreter.token_stream = transform(interpreter.token_stream)
-    return Xident
+    def __init__(self, src=None): #, parent=None, auto_eval=True):
+        if src.__class__ == dict:
+            #print 'EXTENSION OF XInterpreter'
+            XObject.__init__(self, src); return
+#       self.auto_eval = auto_eval
+        self['stream'] = stream_str(src) if isinstance(src, str) else src
+        self['convert_unknown_tokens'] = box_unknown
+        # here could be autolookup, raise Exception or whatever else
+        self['state'] = None
+        self['__name__'] = box('interpreter')
 
-xslang_rootobj = XDictionaryObject({
-    'context': XDictionaryObject({
-        'set': Xset,
-        'get': Xget,
-    }),
-    'function': XDictionaryObject({
-        'of': XfunctionOf,
-        'dualarg': Xdualarg,
-    }),
-    'internals': XDictionaryObject({
-        'bind': Xbind,
-        'empty': Xempty,
-        'inject': Xinject,
-        'pyfunc': Xpyfunc,
-    }),
-    'operator': XDictionaryObject({
-        'abort': Xabort,
-        'lazy': Xlazy,
-        'ident': Xident,
-        'ignore': Xignore,
-        'ternary': Xternary,
-        'if': Xif,
-        'prefix': Xprefix,
-    }),
-    'package': XDictionaryObject({}),
-    'syntax': XDictionaryObject({
-            'enable': XsyntaxEnable,
-    }),
-    'type': XDictionaryObject({
-        'bool': XDictionaryObject({
-            'true': Xtrue(),
-            'false': Xfalse(),
-        }),
-        'int': XDictionaryObject({
-            'add': Xint_add,
-            'equals': Xint_equals,
-            'new': Xint_new,
-            'string': Xint_string,
-            'subtract': Xint_subtract,
-            'to': Xint_to,
-            'zero': Xint(0),
-        }),
-        'none': Xnone,
-        'string': XDictionaryObject({
-            'concatenate': Xstring_concatenate,
-            'constants': XDictionaryObject({
-                'newline': Xstring('\n'),
-            }),
-            'equals': Xstring_equals,
-            'join': Xstring_join,
-            'length': Xstring_length,
-            'literal': XStringLiteralMutator(),
-        }),
-        'tuple': XDictionaryObject({
-            'add': Xtuple_add,
-            'empty': Xtuple(tuple()),
-            'equals': Xtuple_equals,
-            'get': Xtuple_get,
-            'filter': Xtuple_filter,
-            'length': Xtuple_length,
-            'map': Xtuple_map,
-            'reduce': Xtuple_reduce,
-        }),
-    }),
+    def __call__(self, t, context=None):
+        if self['state'] is None: self['state'] = t
+        else: self['state'] = self['state'](t, context=self)
+        if '__hack_apply__' in self['state']:
+            #print 'got hack', self['state']['__hack_apply__']
+            hack_result = self['state']['__hack_apply__'](self)
+            #print 'hack resulted in', hack_result
+            if hack_result is not None: self['state'] = hack_result
+
+    def process_token(self, t, context):
+        if not context: raise XError("NCTX")
+        if t == '(':
+            return XContext.create(
+                    stream_read_until_closing_brace(self['stream']))
+#        elif t in self: return self[t]
+        elif context and t in context: return context[t]
+        return self['convert_unknown_tokens'](t)
+
+    def eval(self, context=None):
+        """ Evaluate the body after collecting the parameters """
+        self['ctx'] = context # to be able to to change it with hacks
+        for t in stream_read_piece(self['stream']):
+            if t == ')':
+                #raise XError('CLOSING BRACE')
+                break
+            else: t = self.process_token(t, context)
+            self(t, context=context)
+
+        return self['state']
+
+### Utilities for wrapping Python functions with XContexts ###
+
+class XPyFuncContainer_(XObject):
+    def eval(self, context=None):
+        inject = []
+        if context:
+            for argname in context['__py_arg_names__']:
+                inject.append(context['__py_arg_vals__'][argname])
+        return self['__py_func__'](*inject, context=context)
+XPyFuncContainer = XPyFuncContainer_()
+
+def XPyFunc(pyfunc, argnames=None, argvals=None):
+    c = XPyFuncContainer.ext(__py_func__=pyfunc, __name__=box(pyfunc.func_name))
+    return XContext(c, argnames=argnames, argvals=argvals)
+
+def XWrappedPyFunc(*argnames, **argvals):
+    def wrapper(func):
+        return XPyFunc(func, argnames, argvals).ext(name=func.func_name)
+    return wrapper
+
+### Hacks ###
+
+def XHackApply(xobj): return Xobject.ext(__hack_apply__=xobj)
+
+@XWrappedPyFunc('hack')
+def hack_apply(xobj, context=None): return XHackApply(xobj)
+
+@XWrappedPyFunc('xinterp')
+def hack_literal(xinterp, context=None):
+    """ xslang hack apply (xslang hack literal) ( l) -> ' l' """
+    literal = stream_read_until_closing_brace(xinterp['stream'], 0)
+    literal = literal.strip()
+    if literal.startswith('(') and literal.endswith(')'):
+        literal = literal[1:-1]
+    xinterp['state'] = box(literal)
+    return
+
+hack = Xobject.ext({'__name__': box('xslang.hack package'),
+    'apply': hack_apply,
+    'literal': hack_literal,
 })
 
-XInterpreter("""(xslang (# syntax) (# enable) (# rich)
-.pyfunc .set xslang.internals.pyfunc
+xslang = xslang.ext(hack=hack)
 
-xslang.internals.inject xslang.type.string .reverse
- (pyfunc 'Xstring string.reverse(string:str) string[::-1]')
+### Python-implemented functions ###
 
-xslang.internals.inject xslang.type.int .greater
- (pyfunc 'Xbool int.greater(a:int b:int) a > b')
+def Xdummy_py(context=None):
+    return box('dummy')
+Xdummy = XPyFunc(Xdummy_py).ext(__name__=box('dummy func'))
 
-xslang.internals.inject xslang.operator .eval {c | xslang.operator.lazy 0 c}
+def Xprint_py(arg, context=None):
+    print 'Printing in', context, type(context),
+    print '           ', context.keys()
+    print 'arg present:', 'arg' in context
+    print 'arg:', arg
+    #print 'lookup:', context[context['arg']]
+Xprint = XPyFunc(Xprint_py, argnames=('arg',)).ext(__name__=box('print func'))
 
-xslang.internals.inject xslang.operator .assert
- {c|
-   xslang.operator.if (xslang.operator.eval c)
-    {xslang.operator.ident} {xslang.operator.abort c}
- }
+def Xreverse_concat_py(str1, str2, context=None):
+    return box(unbox(str2) + unbox(str1))
+Xreverse_concat = XPyFunc(Xreverse_concat_py, argnames=('str1', 'str2')).ext(
+        __name__=box('print func'))
 
-)""", root_obj=xslang_rootobj).eval()
+xslang = xslang.ext({
+    'dummy': Xdummy,
+    'print': Xprint,
+    'reverse_concat': Xreverse_concat,
+})
 
-if __name__ == '__main__': print XInterpreter(raw_input()).eval()
+# Ideas for requesting args:
+# f = (xslang function of (a b c=d) (c b a))
+
+#print Xprint
+#print XContext.create('xslang (print)')
+#print XContext.create('xslang literal xslang')
+#print XContext.create('xslang reverse_concat (WORLD!) HELLO')
+#print XContext.create(
+#    'xslang reverse_concat (xslang reverse_concat RLD! WO) HELLO')
+#print XClosure('xslang print xslang').eval()
+#print XClosure('xslang print (xslang (type) str base)').eval()
+
+# interactive evaluation:
+# * xslang syntax enable rich (
+# ** something is going on here
+# !! Something arg1='is', arg2='going' arg3='here'
+# *)
+#
+# > xslang syntax enable rich (something is going on here
+
+if __name__ == '__main__': print XContext.create(raw_input())

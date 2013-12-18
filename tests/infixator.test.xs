@@ -1,3 +1,4 @@
+DISABLED
 (xslang (# syntax) (# enable) (# rich)
 
 .- .set (xslang.operator.lazy 2 {~ xslang.type.int.subtract})

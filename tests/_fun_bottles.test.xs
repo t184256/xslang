@@ -1,3 +1,4 @@
+DISABLED
 (xslang (# syntax) (# enable) (# rich)
  xslang.type.string.constants.newline.join(
   ( 10 .to 0 ).map { i |

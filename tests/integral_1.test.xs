@@ -1,3 +1,4 @@
+DISABLED
 (xslang (# syntax) (# enable) (# dotty_literals)
  xslang.context.set .hi .(HELLO)
  xslang.context.set .func_reverse (

@@ -1,3 +1,4 @@
+DISABLED
 (xslang (# syntax) (# enable) (# rich)
  .n .set 9
  xslang.context.set .recloop { i acc |

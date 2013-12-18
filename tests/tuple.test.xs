@@ -1,3 +1,4 @@
+DISABLED
 (xslang (# syntax) (# enable) (# rich)
  .tpl .set xslang.type.tuple
  .t .set (tpl.empty

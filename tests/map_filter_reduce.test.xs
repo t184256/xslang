@@ -1,3 +1,4 @@
+DISABLED
 (xslang (# syntax) (# enable) (# rich)
  .t .set [1, 2, 3, 4, 5]
  .f .set {x| x.equals 3 }

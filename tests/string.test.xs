@@ -1,3 +1,4 @@
+DISABLED
 (xslang (# syntax) (# enable) (# rich)
  .pre .set 'HE'
  .mid .set .L

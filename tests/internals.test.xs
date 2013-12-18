@@ -1,3 +1,4 @@
+DISABLED
 (xslang (# syntax) (# enable) (# rich)
 
 xslang.internals.inject xslang.type.int .greater_than

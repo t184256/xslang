@@ -1,3 +1,4 @@
+DISABLED
 (xslang (# syntax) (# enable) (# rich)
 
 .(Hello) .concatenate ' [st\'range \\abc unba(lanced braces\\' .concatenate '!'

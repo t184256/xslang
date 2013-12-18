@@ -1,3 +1,4 @@
+DISABLED
 (xslang (# syntax) (# enable) (# rich)
  .recloop .set { acc i |
   xslang.operator.if (i.equals(8))

@@ -1,3 +1,4 @@
+DISABLED
 (xslang (# syntax) (# enable) (# rich)
 
 .o .set (xslang.internals.empty ())

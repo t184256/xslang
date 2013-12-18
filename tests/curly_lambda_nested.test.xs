@@ -1,3 +1,4 @@
+DISABLED
 (xslang (# syntax) (# enable) (# curly_braced_functions)
  xslang (# syntax) (# enable) (# dotty_literals)
  xslang.context.set.ctx xslang.context

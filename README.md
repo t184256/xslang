@@ -42,7 +42,8 @@ The phases of the project:
 3) Writing a standard library for it
 
 4) Choosing how the source-to-source transformations should be defined
-(regexps? LEPL-assisted transformations? lower priority identifier redefinitions? custom executable rewriters?)
+(character stream transformations? regexps? LEPL-assisted transformations?
+lower priority identifier redefinitions? custom executable rewriters?)
 and stacked.
 
 5) Implementing those transformations
@@ -58,54 +59,35 @@ The project used to provide an interpreter in LEPL,
 then a core language named JOPA (Joys Of Partial Application,
 but now a core language named XSLang is used.
 
-It is pretty small syntactically and is interpreted with pure python.
+It is pretty small syntactically and is interpreted with pure Python.
 So pure that no imports are used.
-Heck, I even think about reimplementing it in C.
+Heck, I even think about reimplementing it in Vala or C.
 
 XSLang (in its core variation) has two syntax rules, braces and whitespace
 
 A brace (f a b c) means:
 
-	Lookup f in current context, mutate it if needed,
+	Lookup f in current context
 
-	lookup a in current context, mutate it if needed
+	lookup a in current context
 
-	call f with a, mutate the result if needed
+	call f with a
 
-	call the result with b, mutate if needed
+	call the result with b
 
-	call the new result with c, mutate if needed
+	call the new result with c
 
 	stop and return the newest result
 
-Mutation is a funny concept.
-It works like this: any temporary or final result of the evaluation is free
-to mutate into some other object or abort the mutation.
-During the mutation it's free to do anything nasty to the interpreter.
-Look at this as an extension point for the interpreter, so that it fits into
-less than hundred lines of code.
-Things implemented with mutation are literal creation and lazy evalutaion of
-bound methods
-(int.string creates a string on instantiation, but string.length doesn't create
-an int so there isn't a loop).
-Things to be implemented with mutation are infixator (a converter of a prefix
-operator into an infix operator) and whatever else would seem nice to me.
-
-By default, two objects are available in the namespace.
-'xslang' gives access to the standard library and '#' mutates the next argument
-into a string literal.
-
-'Do not evaluate' like the Lisp's quote is also done with #.
-
 For examples of XSLang code refer to the tests folder.
-
-My XSLang interpreter offers REALLY EAGER EVALUATION
-and tries to calculate something after each new succesfully obtained byte.
-This is nicely demonstrated in a TRULY INTERACTIVE INTERPRETER demo.
-Execute './interactive.py +rich' to play with it.
 
 The key point of XSLang is its possibility to enable syntax transformations for
 some parts of the code in runtime.
+
+Context pollution is taken seriously: apart from the 'xslang' variable
+any new context must explicitely define what it borrows from the definition
+context and what it takes from the evaluation context.
+Poisoning parent contexts is forbidden too, but that's not so unusual.
 
 Transformations do something like this:
 
@@ -120,5 +102,6 @@ a;b				<=>	(xslang.operator.last.a b) ???
 a.b				<=>	(a b) ???
 ```
 
-One day I would document XSLang more thoroughly, but for now refer to the
-source (there is not much!) and to the tests. Sorry for the inconvenience.
+One day I would document XSLang more thoroughly, (and stop rewriting it!)
+but for now refer to the source (it's not so long!) and to the tests.
+Sorry for the inconvenience.
