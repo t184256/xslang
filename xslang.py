@@ -257,7 +257,8 @@ class XPyFuncContainer_(XObject):
         if context:
             for argname in context.__py_arg_names__:
                 inject.append(context.__py_arg_vals__[argname])
-        return self.__py_func__(*inject, context=context)
+        c = {'context': context} # For Python 2.t compatibility
+        return self.__py_func__(*inject, **c)
 XPyFuncContainer = XPyFuncContainer_()
 
 def XPyFunc(pyfunc, argnames=None, argvals=None):
