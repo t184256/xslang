@@ -16,23 +16,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-# The differences:
-# XSomething : XObject (dict-based, consumes strings and lookups them)
-# XSomething : XClosure (a brace, a code block, a function, consumes anything)
-# XClosure: has input parameters
-# XClosure: collects input parameters one by one and stores them inside
-# XClosure: parameters are named and can have default values
-# function: an XClosure that started consuming parameters and will eval after
-#       consuming all
-# Binding arguments to a closure: {x y z| z y x} x_bound_value
-
-# Everything is immutable!
-# Everything (except funcs) is obtained by extending the XObject
-# There should be a way to pass a parameter to a closure out-of-order
-# xslang.function.pass_named_param func.__closure__ .paramname paramval
-
-# character-based streams
-
 ### Definition of the basics ###
 
 class XError(Exception):
@@ -58,30 +41,26 @@ class XObject(dict):
         if not '__py_type__' in arg or arg['__py_type__'] != 'string':
             raise XError('The key is not a string "%s" <- "%s"' % (self, arg))
         return self[unbox(arg)]
-    def extend(self, name, arg):
-        new_dic = self.copy()
-        new_dic[name] = arg
-        new = self.__class__(new_dic)
-        if any(not k in new for k in self.keys()): raise XError('Bad extension')
-        return new
-    def ext(self, *a, **kwa):
+    def ext(self, *a, **kwa): # return an updated (extended) copy
         new_dic = self.copy()
         for dic in a: new_dic.update(dic)
         new_dic.update(kwa)
         new = self.__class__(new_dic)
         if any(not k in new for k in self.keys()): raise XError('Bad extension')
         return new
-    def __setattr__(self, n, v):
-        raise XError('Setting attribute %s.%s is a bad idea' % (type(self), n))
+    def __setattr__(self, name, val): self[name] = val
+    def __getattr__(self, name): return self[name]
 
-Xobject = XObject()
+Xobject = XObject() # The base object, nearly everything else is its extension
 
-_gen_type = lambda type_name, def_val: Xobject.ext({
-        'base':  Xobject.ext(__py_type__=type_name, __py_val__=def_val)
-})
+### Primitive types (which map to a simple python type) ###
 
-xslang = Xobject.ext({
-    'type': Xobject.ext({
+_gen_type = lambda type_name, def_val: Xobject.ext(
+        base=Xobject.ext(__py_type__=type_name, __py_val__=def_val)
+)
+
+xslang = Xobject.ext(
+    type=Xobject.ext({
         'bool': Xobject.ext({
             'base':     Xobject.ext(__py_type__='bool'),
             'true':     Xobject.ext(__py_type__='bool', __py_val__=True),
@@ -92,38 +71,33 @@ xslang = Xobject.ext({
         'string':   _gen_type('string', ''),
         'list':     _gen_type('list', list())
     })
-})
-
-### Primitive type (which maps to a simple python type) ###
+)
 
 def box(pyval):
-    # Needs to actually extend existing prototypes (with methods)
-    # not XObject
     if isinstance(pyval, bool):     base = 'bool'
     elif isinstance(pyval, int):    base = 'int'
     elif pyval is None:             base = 'none'
     elif isinstance(pyval, str):    base = 'string'
     elif isinstance(pyval, tuple):  base = 'list'
-    elif hasattr(pyval, '__iter__'):base = 'list'; pyval = list(pyval)
+    elif hasattr(pyval, '__iter__'):base = 'list'; pyval = tuple(pyval)
     else: raise XError('How to box type %s?' % type(pyval))
     base = xslang['type'][base]['base']
-    return base.extend('__py_val__', pyval)
+    return base.ext(__py_val__=pyval)
 
 def unbox(Xval):
     if not '__py_type__' in Xval or not '__py_val__' in Xval:
         raise XError('How to unbox %s?' % Xval)
-    return Xval['__py_val__']
+    return Xval.__py_val__
 
 ### Nice names for packages ###
 
-xslang = xslang.extend('__name__', box('xslang root package'))
-xslang = xslang.extend('type',
-        xslang['type'].extend('__name__', box('xslang.type package'))
-)
+xslang = xslang.ext(__name__=box('xslang root package'))
+xslang = xslang.ext(type=xslang.type.ext(__name__=box('xslang.type package')))
 
 ### Streaming ###
 
 def stream_str(string):
+    """ Converts a string into a stream of characters """
     while True:
         if not string: return
         c, string = string[0], string[1:]
@@ -154,6 +128,7 @@ def stream_read_piece(stream):
         if not t.isspace(): yield t
 
 def stream_read_until_closing_brace(stream, opened=1):
+    """ Converts: '(abc) xef)' -> '(abc)' if opened == 0 else '(abc) xef)' """
     s, b = '', opened
     for c in stream:
         s += c
@@ -165,63 +140,42 @@ def stream_read_until_closing_brace(stream, opened=1):
     if b: raise XError('Unbalanced braces: "%s"' % s)
     return s
 
-flatten = lambda s, *a: ''.join(list(
-    stream_read_until_closing_brace(stream_str(s), *a)))
-assert flatten('abc', 0) == 'abc'
-assert flatten('()', 0) == '()'
-assert flatten('(abc) xef)', 0) == '(abc)'
-assert flatten('(abc) xef)', 1) == '(abc) xef)'
-assert flatten(' (abc) (def)', 0) == ' (abc)'
-
 ### Arguments collector: the closure, the context ###
 
 class XContext(XObject):
     """
-    A closure, a context, an arg collector.
+    A closure, a context, an arg collector.  Is immutable.
     It wraps an evalable (a XPyFunc or an XInterpreter).
-    Is immutable.
-
-    It collects all necessary argument values
-    and evaluates on consuming the last one.
-
+    It collects argument values and evaluates on consuming the last one.
+    To prevent evaluation you may require one more argument and pass it later.
     It can collect args with different lookup policies:
         1) require a parameter to be provided with __call__
         2) lookup parameter in current context
         3) have a default (bound) value of a parameter
-    One day { in1 in2 ^outer bound_x=x | ... } will mean that
+    One day { in1 in2 ^outer bound_x=x | body } will mean that
         1) bound_x gets bound at the moment of context definition
             self.args_bound['bound_x'] = x  (like inherited from parent context)
         2) outer will be looked up in another parent context
             upon evaluating the body
         3-4) in1 and in2 will be consumed with __call__
-    After that the function will evaluate,
-    to prevent it require one more argument and pass it later.
     """
 
     def __init__(self, wrapped, argnames=None, argvals=None, stream=False):
-        if wrapped.__class__ == dict:
-            XObject.__init__(self, wrapped)
+        if wrapped.__class__ == dict: XObject.__init__(self, wrapped)
         else:
             if isinstance(wrapped, str) or stream:
-                #print 'WRAPPING', wrapped
                 wrapped = XInterpreter(wrapped)
-            self['wrapped'] = wrapped
-            self['__py_arg_names__'] = argnames if argnames else []
-            self['__py_arg_vals__'] = argvals if argvals else {}
-            self['xslang'] = xslang
-            self['__name__'] = box('XContext "%s"' % self['wrapped'])
-        # Let's evaluate and cache this
-        self['valless'] = list(a for a in self['__py_arg_names__']
-                               if not a in self['__py_arg_vals__'])
-        #print 'XContextNEW', n, self['valless']
-        #print 'XContextNEW', type(self['wrapped']), self['valless'], self.keys()
-        #print 'XContextNEW', self['__py_arg_names__'], self['__py_arg_vals__']
-        if self['wrapped'].__class__ == dict: raise XError('PANIC!')
+            self.xslang = xslang
+            self.wrapped = wrapped
+            self.__name__ = box('XContext "%s"' % self.wrapped)
+            self.__py_arg_names__ = argnames if argnames else []
+            self.__py_arg_vals__ = argvals if argvals else {}
+        # Let's evaluate and cache this (NOTE: it's ordered!)
+        self.valless = tuple(a for a in self.__py_arg_names__
+                               if not a in self.__py_arg_vals__)
 
     @staticmethod
-    def create(*a, **kwa):
-        n = XContext(*a, **kwa)
-        return n.try_eval()
+    def create(*a, **kwa): return XContext(*a, **kwa).try_eval()
 
     def with_addn_arg(self, argn, def_val=None):
         new_argvals = self.argvals.copy()
@@ -232,41 +186,25 @@ class XContext(XObject):
         })
 
     def with_addn_val(self, val, argn=None, context=None):
-        if argn is None: argn = self['valless'][0]
-        new_argvals = self['__py_arg_vals__'].copy()
+        if argn is None: argn = self.valless[0]
+        new_argvals = self.__py_arg_vals__.copy()
         new_argvals[argn] = val
         new_self = self.ext({
-            '__py_arg_names__': self['__py_arg_names__'],
+            '__py_arg_names__': self.__py_arg_names__,
             '__py_arg_vals__': new_argvals,
         })
-        #print 'NEW valless', new_self['valless']
         return new_self.try_eval()
 
     def __call__(self, v, context=None):
-        #print 'valless', self['wrapped'], self['valless'], '<-', v
-        if not self['valless']:
-            raise XError('already not valless! (%s <- %s)' % (self, v))
-        #print 'collected val', self, v
+        if not self.valless: raise XError('Extra parameter "%s"' % v)
         return self.with_addn_val(v, context=None)
 
     def try_eval(self):
-        if not self['valless']:
-            return self['wrapped'].eval(
-                context=self.ext(self['__py_arg_vals__']))
+        if not self.valless:
+            return self.wrapped.eval(context=self.ext(self.__py_arg_vals__))
         return self
 
-
-#    def parent_lookup(self, argname, context):
-#        if context and argname in self.args_lookup:
-#                if argname in context: return True
-#        return False
-
-
 ### The main thing: the interpreter ###
-
-def box_unknown(val):
-    #print 'BOX UNKNOWN "%s"' % val
-    return box(val)
 
 class XInterpreter(XObject):
     """
@@ -281,45 +219,35 @@ class XInterpreter(XObject):
     """
 
     def __init__(self, src=None): #, parent=None, auto_eval=True):
-        if src.__class__ == dict:
-            #print 'EXTENSION OF XInterpreter'
-            XObject.__init__(self, src); return
-#       self.auto_eval = auto_eval
-        self['stream'] = stream_str(src) if isinstance(src, str) else src
-        self['convert_unknown_tokens'] = box_unknown
-        # here could be autolookup, raise Exception or whatever else
-        self['state'] = None
-        self['__name__'] = box('interpreter')
+        if src.__class__ == dict: XObject.__init__(self, src); return
+        self.stream = stream_str(src) if isinstance(src, str) else src
+        self.convert_unknown_tokens = box # here could be anything!
+        self.state = None
+        self.__name__ = box('interpreter')
 
     def __call__(self, t, context=None):
-        if self['state'] is None: self['state'] = t
-        else: self['state'] = self['state'](t, context=self)
-        if '__hack_apply__' in self['state']:
-            #print 'got hack', self['state']['__hack_apply__']
-            self['state'] = self['state']['__hack_apply__'](self)
+        if self.state is None: self.state = t
+        else: self.state = self.state(t, context=self)
+        if '__hack_apply__' in self.state:
+            #print 'got hack', self.state.__hack_apply__
+            self.state = self.state.__hack_apply__(self)
             #print 'hack resulted in', hack_result
-            #if hack_result is not None: self['state'] = hack_result
 
     def process_token(self, t, context):
         if not context: raise XError("NCTX")
         if t == '(':
-            return XContext.create(
-                    stream_read_until_closing_brace(self['stream']))
-#        elif t in self: return self[t]
+            return XContext.create(stream_read_until_closing_brace(self.stream))
         elif context and t in context: return context[t]
-        return self['convert_unknown_tokens'](t)
+        return self.convert_unknown_tokens(t)
 
     def eval(self, context=None):
         """ Evaluate the body after collecting the parameters """
-        self['ctx'] = context # to be able to to change it with hacks
-        for t in stream_read_piece(self['stream']):
-            if t == ')':
-                #raise XError('CLOSING BRACE')
-                break
-            else: t = self.process_token(t, context)
+        self.ctx = context # to be able to replace it with hacks
+        for t in stream_read_piece(self.stream):
+            if t == ')': break
+            t = self.process_token(t, context)
             self(t, context=context)
-
-        return self['state']
+        return self.state
 
 ### Utilities for wrapping Python functions with XContexts ###
 
@@ -327,9 +255,9 @@ class XPyFuncContainer_(XObject):
     def eval(self, context=None):
         inject = []
         if context:
-            for argname in context['__py_arg_names__']:
-                inject.append(context['__py_arg_vals__'][argname])
-        return self['__py_func__'](*inject, context=context)
+            for argname in context.__py_arg_names__:
+                inject.append(context.__py_arg_vals__[argname])
+        return self.__py_func__(*inject, context=context)
 XPyFuncContainer = XPyFuncContainer_()
 
 def XPyFunc(pyfunc, argnames=None, argvals=None):
@@ -349,7 +277,7 @@ def hack_apply(xobj, context=None): return XHackApply(xobj)
 @XWrappedPyFunc('xinterp')
 def hack_literal(xinterp, context=None):
     """ xslang hack apply (xslang hack literal) ( l) -> ' l' """
-    literal = stream_read_until_closing_brace(xinterp['stream'], 0)
+    literal = stream_read_until_closing_brace(xinterp.stream, 0)
     literal = literal.strip()
     if literal.startswith('(') and literal.endswith(')'):
         literal = literal[1:-1]
@@ -384,7 +312,6 @@ def Xprint_py(arg, context=None):
     print '           ', context.keys()
     print 'arg present:', 'arg' in context
     print 'arg:', arg
-    #print 'lookup:', context[context['arg']]
 Xprint = XPyFunc(Xprint_py, argnames=('arg',)).ext(__name__=box('print func'))
 
 def Xreverse_concat_py(str1, str2, context=None):
@@ -400,22 +327,6 @@ xslang = xslang.ext({
 
 # Ideas for requesting args:
 # f = (xslang function of (a b c=d) (c b a))
-
-#print Xprint
-#print XContext.create('xslang (print)')
-#print XContext.create('xslang literal xslang')
-#print XContext.create('xslang reverse_concat (WORLD!) HELLO')
-#print XContext.create(
-#    'xslang reverse_concat (xslang reverse_concat RLD! WO) HELLO')
-#print XClosure('xslang print xslang').eval()
-#print XClosure('xslang print (xslang (type) str base)').eval()
-
-# interactive evaluation:
-# * xslang syntax enable rich (
-# ** something is going on here
-# !! Something arg1='is', arg2='going' arg3='here'
-# *)
-#
-# > xslang syntax enable rich (something is going on here
+# f = (xslang function block (c b a) param a param b param c defval d try_eval)
 
 if __name__ == '__main__': print XContext.create(raw_input())

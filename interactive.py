@@ -172,5 +172,12 @@ def main():
 #            display_error = 'E ' + str(e)
 #            s = i.h[:-1]
 
-if __name__ == '__main__': main()
+# Interactive evaluation view ideas:
+# * xslang syntax enable rich (
+# ** something is going on here
+# !! Something arg1='is', arg2='going' arg3='here'
+# *)
+#
+# > xslang syntax enable rich (something is going on here
 
+if __name__ == '__main__': main()
