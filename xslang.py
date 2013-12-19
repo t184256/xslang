@@ -249,6 +249,14 @@ class XInterpreter(XObject):
             self(t, context=context)
         return self.state
 
+    def read_literal(self, strip_whitespace=True, strip_braces=True):
+        """ An utility function for hacks. Steals a literal from a stream """
+        literal = stream_read_until_closing_brace(self.stream, 0)
+        if strip_whitespace: literal = literal.strip()
+        if strip_braces and literal.startswith('(') and literal.endswith(')'):
+            literal = literal[1:-1]
+        return literal
+
 ### Utilities for wrapping Python functions with XContexts ###
 
 class XPyFuncContainer_(XObject):
@@ -278,11 +286,7 @@ def hack_apply(xobj, context=None): return XHackApply(xobj)
 @XWrappedPyFunc('xinterp')
 def hack_literal(xinterp, context=None):
     """ xslang hack apply (xslang hack literal) ( l) -> ' l' """
-    literal = stream_read_until_closing_brace(xinterp.stream, 0)
-    literal = literal.strip()
-    if literal.startswith('(') and literal.endswith(')'):
-        literal = literal[1:-1]
-    return box(literal)
+    return box(xinterp.read_literal())
 
 hack = Xobject.ext({'__name__': box('xslang.hack package'),
     'apply': hack_apply,
