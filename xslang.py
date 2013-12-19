@@ -69,7 +69,7 @@ xslang = Xobject.ext(
         'int':      _gen_type('int', 0),
         'none':     _gen_type('none', None),
         'string':   _gen_type('string', ''),
-        'list':     _gen_type('list', list())
+        'list':     _gen_type('list', tuple())
     })
 )
 
@@ -125,7 +125,7 @@ def stream_read_piece(stream):
     ('(', 'xslang', 'operator', ')', 'ident')
     """
     for t in stream_read_single(stream):
-        if not t.isspace(): yield t
+        if t and not t.isspace(): yield t
 
 def stream_read_until_closing_brace(stream, opened=1):
     """ Converts: '(abc) xef)' -> '(abc)' if opened == 0 else '(abc) xef)' """
@@ -168,7 +168,7 @@ class XContext(XObject):
             self.xslang = xslang
             self.wrapped = wrapped
             self.__name__ = box('XContext "%s"' % self.wrapped)
-            self.__py_arg_names__ = argnames if argnames else []
+            self.__py_arg_names__ = argnames if argnames else ()
             self.__py_arg_vals__ = argvals if argvals else {}
         # Let's evaluate and cache this (NOTE: it's ordered!)
         self.valless = tuple(a for a in self.__py_arg_names__
@@ -178,10 +178,10 @@ class XContext(XObject):
     def create(*a, **kwa): return XContext(*a, **kwa).try_eval()
 
     def with_addn_arg(self, argn, def_val=None):
-        new_argvals = self.argvals.copy()
+        new_argvals = self.__py_arg_vals__.copy()
         if not def_val is None: new_argvals[argn] = def_val
         return self.ext({
-            '__py_arg_names__': self.argnames + (argn,),
+            '__py_arg_names__': self.__py_arg_names__ + (argn,),
             '__py_arg_vals__': new_argvals,
         })
 
@@ -199,7 +199,7 @@ class XContext(XObject):
         if not self.valless: raise XError('Extra parameter "%s"' % v)
         return self.with_addn_val(v, context=None)
 
-    def try_eval(self):
+    def try_eval(self, context=None): # context is unused for now!
         if not self.valless:
             return self.wrapped.eval(context=self.ext(self.__py_arg_vals__))
         return self
@@ -288,9 +288,31 @@ def hack_literal(xinterp, context=None):
     """ xslang hack apply (xslang hack literal) ( l) -> ' l' """
     return box(xinterp.read_literal())
 
+class XCodeBlock(XObject):
+    def __call__(self, arg, context=None):
+        if unbox(arg) == 'try_eval':
+            return self.__context__.try_eval(context=context)
+        raise XError('only try_eval is allowed, not "%s"' % arg)
+Xcode_block = XCodeBlock()
+
+@XWrappedPyFunc('xinterp')
+def hack_block(xinterp, context=None):
+    """ (xslang hack apply (xslang hack block) (body) a b=c) try_eval """
+    body = xinterp.read_literal()
+    ctx  = XContext(body)
+    argnames = xinterp.read_literal()
+    for argname in argnames.split():
+        if '=' in argname:
+            argname, defval = argname.split('=')
+            ctx = ctx.with_addn_arg(argname, defval)
+        else:
+            ctx = ctx.with_addn_arg(argname)
+    return Xcode_block.ext(__context__=ctx)
+
 hack = Xobject.ext({'__name__': box('xslang.hack package'),
     'apply': hack_apply,
     'literal': hack_literal,
+    'block': hack_block,
 })
 
 xslang = xslang.ext(hack=hack)
