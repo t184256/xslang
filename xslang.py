@@ -167,9 +167,9 @@ class XContext(XObject):
                 wrapped = XInterpreter(wrapped)
             self.xslang = xslang
             self.wrapped = wrapped
-            self.__name__ = box('XContext "%s"' % self.wrapped)
             self.__py_arg_names__ = argnames if argnames else ()
             self.__py_arg_vals__ = argvals if argvals else {}
+            self.__name__ = box('XContext "%s"' % self.wrapped)
         # Let's evaluate and cache this (NOTE: it's ordered!)
         self.valless = tuple(a for a in self.__py_arg_names__
                                if not a in self.__py_arg_vals__)
@@ -227,7 +227,7 @@ class XInterpreter(XObject):
 
     def __call__(self, t, context=None):
         if self.state is None: self.state = t
-        else: self.state = self.state(t, context=self)
+        else: self.state = self.state(t, context=context)
         if '__hack_apply__' in self.state:
             #print 'got hack', self.state.__hack_apply__
             self.state = self.state.__hack_apply__(self)
@@ -245,8 +245,8 @@ class XInterpreter(XObject):
         self.ctx = context # to be able to replace it with hacks
         for t in stream_read_piece(self.stream):
             if t == ')': break
-            t = self.process_token(t, context)
-            self(t, context=context)
+            t = self.process_token(t, self.ctx)
+            self(t, context=self.ctx)
         return self.state
 
     def read_literal(self, strip_whitespace=True, strip_braces=True):
@@ -309,15 +309,41 @@ def hack_block(xinterp, context=None):
             ctx = ctx.with_addn_arg(argname)
     return Xcode_block.ext(__context__=ctx)
 
+@XWrappedPyFunc('xinterp')
+def hack_with(xinterp, context=None):
+    """ (xslang hack apply (xslang hack with) varname (so meth ing)) """
+    varname = xinterp.read_literal()
+    return hack_with_.ext(xinterp=xinterp, varname=varname)
+
+class HackWith(XObject):
+    func_name = 'setter'
+    def __call__(self, val, context=None): # convert to class
+        hs = hack_with_setter.ext(xinterp=self.xinterp, varname=self.varname,
+                                  val=val)
+        return XHackApply(hs)
+hack_with_ = HackWith()
+
+class HackWithSetter(XObject):
+    func_name = 'setter'
+    def __call__(self, xinterp_unused, context=None):
+        self.xinterp.ctx = self.xinterp.ctx.ext({self.varname: self.val})
+        return ident
+hack_with_setter = HackWithSetter()
+
 hack = Xobject.ext({'__name__': box('xslang.hack package'),
     'apply': hack_apply,
-    'literal': hack_literal,
     'block': hack_block,
+    'literal': hack_literal,
+    'with': hack_with,
 })
 
 xslang = xslang.ext(hack=hack)
 
 ### Python-implemented functions ###
+
+@XWrappedPyFunc('arg')
+def ident(arg, context=None):
+    return arg
 
 @XWrappedPyFunc('argname', 'body')
 def function_of(argname, body, context=None):

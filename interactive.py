@@ -16,7 +16,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-from xslang import XContext, XError
+from xslang import XContext, XInterpreter, XError
 
 import sys, time, re, traceback
 
@@ -101,7 +101,15 @@ def shorten(s, maxlen):
     return s[:maxlen - 3] + '..' + s[-1]
 
 def printstate(b, shorten_to=80, stars=1):
-    print b['wrapped']['state']
+    ws = b['wrapped']['state']
+    if isinstance(ws, XContext):
+        print 'ctx', ws
+        if 'wrapped' in ws:
+            print 'wrp', ws.wrapped
+            if isinstance(ws.wrapped, XInterpreter):
+                ws = b.wrapped.state
+                print 'wws', ws.wrapped.state
+    print ws
 #    print b['state']
 #    for f in b.chain:
 #        if isinstance(f, XInterpreter):
@@ -168,9 +176,9 @@ def main():
         except XError, e:
             display_error = 'X ' + str(e)
             s = i.h[:-1]
-#        except Exception, e:
-#            display_error = 'E ' + str(e)
-#            s = i.h[:-1]
+        except Exception, e:
+            display_error = 'E ' + str(e)
+            s = i.h[:-1]
 
 # Interactive evaluation view ideas:
 # * xslang syntax enable rich (
