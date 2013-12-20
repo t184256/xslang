@@ -103,29 +103,13 @@ def stream_str(string):
         c, string = string[0], string[1:]
         yield c
 
-def stream_read_single(stream):
-    """
-    Converts '(xslang operator) ident') to a stream of
-    ('(', 'xslang', ' ', 'operator', ')', ' ', 'ident')
-    """
+def stream_read_singles(stream):
     s = ''
     for c in stream:
+        if c in '()' or c.isspace(): return (s, c)
         s += c
-        if s:
-            if s[-1] == '(' or s[-1].isspace():
-                if s[:-1]: yield s[:-1]
-                yield s[-1]; s = ''
-        if s:
-            if s[-1] == ')': yield s[:-1]; yield s[-1]; s = ''
-    if s: yield s
-
-def stream_read_piece(stream):
-    """
-    Converts '(xslang operator) ident') to a stream of
-    ('(', 'xslang', 'operator', ')', 'ident')
-    """
-    for t in stream_read_single(stream):
-        if t and not t.isspace(): yield t
+    if s: return (s,)
+    raise StopIteration
 
 def stream_read_until_closing_brace(stream, opened=1):
     """ Converts: '(abc) xef)' -> '(abc)' if opened == 0 else '(abc) xef)' """
@@ -139,6 +123,36 @@ def stream_read_until_closing_brace(stream, opened=1):
         if not b and s and not s.isspace() and c.isspace(): return s[:-1]
     if b: raise XError('Unbalanced braces: "%s"' % s)
     return s
+
+### Transformations ###
+
+def transformation_composition(t, *a): # TODO: reimplement with reduce
+    for t_ in a: t = t(t_)
+    return t
+
+def transformation_replace(rep_map):
+    def stream_replace(stream):
+        s = ''
+        for c in stream:
+            s += c
+            if s in rep_map:
+                for z in rep_map[s]: yield z
+                s = ''
+            else:
+                if any(fr.startswith(s) for fr in rep_map): continue
+            for z in s: yield z
+            s = ''
+    return stream_replace
+
+transformations = Xobject.ext({
+    'curly': transformation_replace({'{': '(', '}': ')'}),
+    'curly_functions': transformation_replace(
+        {'{': '(xslang hack apply (xslang hack block) (',
+         '|': ') (',
+         '}': ') try_eval)'
+        }
+    )
+})
 
 ### Arguments collector: the closure, the context ###
 
@@ -243,10 +257,14 @@ class XInterpreter(XObject):
     def eval(self, context=None):
         """ Evaluate the body after collecting the parameters """
         self.ctx = context # to be able to replace it with hacks
-        for t in stream_read_piece(self.stream):
-            if t == ')': break
-            t = self.process_token(t, self.ctx)
-            self(t, context=self.ctx)
+        try:
+            while True:
+                for t in stream_read_singles(self.stream):
+                    if not t or t.isspace(): continue
+                    if t == ')': break
+                    t = self.process_token(t, self.ctx)
+                    self(t, context=self.ctx)
+        except StopIteration: pass
         return self.state
 
     def read_literal(self, strip_whitespace=True, strip_braces=True):
@@ -297,10 +315,10 @@ Xcode_block = XCodeBlock()
 
 @XWrappedPyFunc('xinterp')
 def hack_block(xinterp, context=None):
-    """ (xslang hack apply (xslang hack block) (body) a b=c) try_eval """
+    """ (xslang hack apply (xslang hack block) (a b=c) (body)) try_eval """
+    argnames = xinterp.read_literal()
     body = xinterp.read_literal()
     ctx  = XContext(body)
-    argnames = xinterp.read_literal()
     for argname in argnames.split():
         if '=' in argname:
             argname, defval = argname.split('=')
@@ -330,10 +348,19 @@ class HackWithSetter(XObject):
         return ident
 hack_with_setter = HackWithSetter()
 
+@XWrappedPyFunc('xinterp')
+def hack_syntax(xinterp, context=None):
+    """ xslang hack apply (xslang hack syntax) transformation_name """
+    transformation_name = xinterp.read_literal()
+    transformation = transformations[transformation_name]
+    xinterp.stream = transformation(xinterp.stream)
+    return ident
+
 hack = Xobject.ext({'__name__': box('xslang.hack package'),
     'apply': hack_apply,
     'block': hack_block,
     'literal': hack_literal,
+    'syntax': hack_syntax,
     'with': hack_with,
 })
 
