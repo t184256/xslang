@@ -146,12 +146,17 @@ def transformation_replace(rep_map):
 
 transformations = Xobject.ext({
     'curly': transformation_replace({'{': '(', '}': ')'}),
-    'curly_functions': transformation_replace(
-        {'{': '(xslang hack apply (xslang hack block) (',
-         '|': ') (',
-         '}': ') try_eval)'
-        }
-    )
+    'curly_functions': transformation_replace({
+        '{': '(xslang hack apply (xslang hack block) (',
+        '|': ') (',
+        '}': ') try_eval)',
+    }),
+    'left_assignment': transformation_replace({
+        ':=': 'xslang hack apply (xslang hack with)'
+    }),
+    'tilda_apply': transformation_replace({
+        '~(': 'xslang hack apply ('
+    }),
 })
 
 ### Arguments collector: the closure, the context ###
