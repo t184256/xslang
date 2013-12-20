@@ -5,9 +5,12 @@ xslang hack apply (xslang hack syntax) tilda_apply
 := a HELLO
 := b WORLD!
 
-:= concat { x y | xslang reverse_concat y x }
+:= z %
 
-concat a b
+:= concat { y ^z | xslang reverse_concat z y }
+
+:= z !
+
+concat b
 ###
-X<'HELLOWORLD!'>
-:= set (:=)
+X<'WORLD!!'>

@@ -161,6 +161,7 @@ transformations = Xobject.ext({
 
 ### Arguments collector: the closure, the context ###
 
+unbound_val = Xobject.ext(__represents_unbound_value__=None, __name__='UNBOUND')
 class XContext(XObject):
     """
     A closure, a context, an arg collector.  Is immutable.
@@ -194,7 +195,12 @@ class XContext(XObject):
                                if not a in self.__py_arg_vals__)
 
     @staticmethod
-    def create(*a, **kwa): return XContext(*a, **kwa).try_eval()
+    def create(*a, **kwa):
+        context = None
+        if 'context' in kwa:
+            context = kwa['context']
+            del kwa['context']
+        return XContext(*a, **kwa).try_eval(context=context)
 
     def with_addn_arg(self, argn, def_val=None):
         new_argvals = self.__py_arg_vals__.copy()
@@ -205,22 +211,32 @@ class XContext(XObject):
         })
 
     def with_addn_val(self, val, argn=None, context=None):
+        new_argnames = self.__py_arg_names__
         if argn is None: argn = self.valless[0]
+        else:
+            if not argn in new_argnames:
+                new_argnames = self.__py_arg_names__ + (argn,)
         new_argvals = self.__py_arg_vals__.copy()
         new_argvals[argn] = val
         new_self = self.ext({
-            '__py_arg_names__': self.__py_arg_names__,
+            '__py_arg_names__': new_argnames,
             '__py_arg_vals__': new_argvals,
         })
-        return new_self.try_eval()
+        return new_self.try_eval(context=context)
 
     def __call__(self, v, context=None):
         if not self.valless: raise XError('Extra parameter "%s"' % v)
-        return self.with_addn_val(v, context=None)
+        return self.with_addn_val(v, context=context)
 
-    def try_eval(self, context=None): # context is unused for now!
+    def try_eval(self, context=None):
+        newly_bound = {}
         if not self.valless:
-            return self.wrapped.eval(context=self.ext(self.__py_arg_vals__))
+            for k, v in self.__py_arg_vals__.items(): # bind lookup ^args
+                if '__represents_unbound_value__' in v:
+                    if not context: raise XError('Lookup in no context')
+                    newly_bound[k] = context[k]
+            return self.wrapped.eval(context=self.ext(self.__py_arg_vals__,
+                                                      newly_bound))
         return self
 
 ### The main thing: the interpreter ###
@@ -248,14 +264,13 @@ class XInterpreter(XObject):
         if self.state is None: self.state = t
         else: self.state = self.state(t, context=context)
         if '__hack_apply__' in self.state:
-            #print 'got hack', self.state.__hack_apply__
             self.state = self.state.__hack_apply__(self)
-            #print 'hack resulted in', hack_result
 
     def process_token(self, t, context):
         if not context: raise XError("NCTX")
         if t == '(':
-            return XContext.create(stream_read_until_closing_brace(self.stream))
+            return XContext.create(
+                stream_read_until_closing_brace(self.stream), context=context)
         elif context and t in context: return context[t]
         return self.convert_unknown_tokens(t)
 
@@ -328,6 +343,9 @@ def hack_block(xinterp, context=None):
         if '=' in argname:
             argname, defval = argname.split('=')
             ctx = ctx.with_addn_arg(argname, defval)
+        elif argname[0] == '^':
+            ctx = ctx.with_addn_val(unbound_val, argn=argname[1:],
+                                    context=context)
         else:
             ctx = ctx.with_addn_arg(argname)
     return Xcode_block.ext(__context__=ctx)
